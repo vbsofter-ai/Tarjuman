@@ -22,10 +22,90 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showGoogleMock, setShowGoogleMock] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState("");
+  const [googleName, setGoogleName] = useState("");
 
   if (!isOpen) return null;
 
   const handleGoogleSignIn = async () => {
+    setError("");
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+    if (clientId) {
+      setLoading(true);
+      try {
+        if (typeof window !== "undefined") {
+          // If google client script is not loaded, inject it dynamically
+          if (!(window as any).google) {
+            const script = document.createElement("script");
+            script.src = "https://accounts.google.com/gsi/client";
+            script.async = true;
+            script.defer = true;
+            document.head.appendChild(script);
+            await new Promise((resolve) => (script.onload = resolve));
+          }
+
+          const google = (window as any).google;
+          google.accounts.id.initialize({
+            client_id: clientId,
+            callback: async (response: any) => {
+              try {
+                // Decode Google JWT Credential payload (base64)
+                const base64Url = response.credential.split(".")[1];
+                const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+                const jsonPayload = decodeURIComponent(
+                  atob(base64)
+                    .split("")
+                    .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+                    .join("")
+                );
+                const payload = JSON.parse(jsonPayload);
+
+                const res = await fetch("/api/auth/login", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    email: payload.email,
+                    name: payload.name || payload.given_name
+                  })
+                });
+
+                const user = await res.json();
+                if (!res.ok || user.error) {
+                  throw new Error(user.error || "Failed to authenticate via Google");
+                }
+
+                localStorage.setItem("tarjuman_current_user", JSON.stringify(user));
+                onAuthSuccess(user);
+                onClose();
+              } catch (err: any) {
+                setError(err.message || "Google Authentication error");
+              } finally {
+                setLoading(false);
+              }
+            }
+          });
+
+          google.accounts.id.prompt();
+        }
+      } catch (err: any) {
+        setError(err.message || "Failed to launch Google Sign-in flow");
+        setLoading(false);
+      }
+    } else {
+      // Trigger developer sandbox mock prompt
+      setShowGoogleMock(true);
+    }
+  };
+
+  const handleGoogleMockSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!googleEmail) {
+      setError(isArabic ? "يرجى إدخال البريد الإلكتروني" : "Please enter your email");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -34,21 +114,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: "romyatef@gmail.com",
-          name: "Ramy Atef"
+          email: googleEmail.trim().toLowerCase(),
+          name: googleName.trim() || googleEmail.split("@")[0]
         })
       });
 
       const user = await res.json();
       if (!res.ok || user.error) {
-        throw new Error(user.error || "Failed to authenticate via Google");
+        throw new Error(user.error || "Failed to sign in via Google Sandbox");
       }
 
       localStorage.setItem("tarjuman_current_user", JSON.stringify(user));
       onAuthSuccess(user);
       onClose();
     } catch (err: any) {
-      setError(err.message || "Authentication error");
+      setError(err.message || "Google Sandbox Sign-in error");
     } finally {
       setLoading(false);
     }
@@ -145,127 +225,199 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+          {showGoogleMock ? (
+            <form onSubmit={handleGoogleMockSubmit} className="space-y-4">
+              <div className="bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs p-3.5 rounded-xl mb-2 space-y-1 text-right" dir="rtl">
+                <h4 className="font-extrabold flex items-center gap-1.5 text-indigo-700">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>تسجيل الدخول التجريبي بحساب جوجل (Google Sandbox)</span>
+                </h4>
+                <p className="text-slate-600 leading-normal">
+                  {isArabic 
+                    ? "لم يتم العثور على NEXT_PUBLIC_GOOGLE_CLIENT_ID في ملف الإعدادات. للتجربة السريعة، يرجى كتابة بريدك الإلكتروني والاسم:" 
+                    : "No Google Client ID configured in your configurations. For local testing, please enter any email and name to sign in:"}
+                </p>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">
-                  {isArabic ? "الاسم الكامل" : "Full Name"}
+                  {isArabic ? "بريد جوجل الإلكتروني" : "Google Email Address"}
+                </label>
+                <div className="relative">
+                  <Mail className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="yourname@gmail.com"
+                    value={googleEmail}
+                    onChange={(e) => setGoogleEmail(e.target.value)}
+                    className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-left font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">
+                  {isArabic ? "الاسم الكامل (اختياري)" : "Full Name (Optional)"}
                 </label>
                 <div className="relative">
                   <UserIcon className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
                   <input
                     type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={isArabic ? "مثال: رامي عاطف" : "e.g. John Doe"}
-                    className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                    placeholder="Ramy Atef"
+                    value={googleName}
+                    onChange={(e) => setGoogleName(e.target.value)}
+                    className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-left font-bold"
                   />
                 </div>
               </div>
-            )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">
-                {isArabic ? "البريد الإلكتروني" : "Email Address"}
-              </label>
-              <div className="relative">
-                <Mail className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={isArabic ? "example@mail.com" : "name@example.com"}
-                  className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">
-                {isArabic ? "كلمة المرور" : "Password"}
-              </label>
-              <div className="relative">
-                <Lock className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full text-sm pr-9 pl-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
-                />
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute top-3 left-3 text-slate-400 hover:text-slate-600"
+                  onClick={() => setShowGoogleMock(false)}
+                  className="flex-1 border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold py-2.5 px-4 rounded-xl text-xs transition-all cursor-pointer"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {isArabic ? "رجوع" : "Back"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-md shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {loading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <span>{isArabic ? "تسجيل دخول تجريبي" : "Confirm Sign In"}</span>
+                  )}
                 </button>
               </div>
-            </div>
+            </form>
+          ) : (
+            <>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {!isLogin && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                      {isArabic ? "الاسم الكامل" : "Full Name"}
+                    </label>
+                    <div className="relative">
+                      <UserIcon className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder={isArabic ? "مثال: رامي عاطف" : "e.g. John Doe"}
+                        className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+                )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 flex items-center justify-center gap-2 mt-2 text-sm"
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : isLogin ? (
-                <>
-                  <LogIn className="w-4 h-4" />
-                  <span>{isArabic ? "تسجيل الدخول" : "Sign In"}</span>
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-4 h-4" />
-                  <span>{isArabic ? "إنشاء حساب جديد" : "Create Account"}</span>
-                </>
-              )}
-            </button>
-          </form>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {isArabic ? "البريد الإلكتروني" : "Email Address"}
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={isArabic ? "example@mail.com" : "name@example.com"}
+                      className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
 
-          {/* Divider */}
-          <div className="relative my-4 flex items-center justify-center">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-100"></div>
-            </div>
-            <span className="relative bg-white px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              {isArabic ? "أو" : "OR"}
-            </span>
-          </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {isArabic ? "كلمة المرور" : "Password"}
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full text-sm pr-9 pl-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute top-3 left-3 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
 
-          {/* Google Sign-In Button */}
-          <button
-            type="button"
-            disabled={loading}
-            onClick={handleGoogleSignIn}
-            className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2.5 text-sm cursor-pointer active:scale-95 disabled:opacity-50"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24">
-              <path
-                fill="#EA4335"
-                d="M12 5.04c1.64 0 3.12.56 4.28 1.67l3.2-3.2C17.52 1.58 14.96 1 12 1 7.35 1 3.39 3.67 1.45 7.56l3.85 2.99c.9-2.7 3.42-4.51 6.7-4.51z"
-              />
-              <path
-                fill="#4285F4"
-                d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.43h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.66 2.84c2.14-1.97 3.39-4.88 3.39-8.48z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.3 14.93c-.23-.69-.36-1.42-.36-2.18s.13-1.49.36-2.18L1.45 7.56C.52 9.42 0 11.48 0 12.75s.52 3.33 1.45 5.19l3.85-3.01z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.66-2.84c-1.01.68-2.31 1.09-3.8 1.09-3.28 0-5.8-1.81-6.7-4.51l-3.85 2.99C3.39 20.33 7.35 23 12 23z"
-              />
-            </svg>
-            <span>
-              {isArabic ? "تسجيل الدخول باستخدام حساب جوجل" : "Sign in with Google"}
-            </span>
-          </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 flex items-center justify-center gap-2 mt-2 text-sm"
+                >
+                  {loading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : isLogin ? (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>{isArabic ? "تسجيل الدخول" : "Sign In"}</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      <span>{isArabic ? "إنشاء حساب جديد" : "Create Account"}</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Divider */}
+              <div className="relative my-4 flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-100"></div>
+                </div>
+                <span className="relative bg-white px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {isArabic ? "أو" : "OR"}
+                </span>
+              </div>
+
+              {/* Google Sign-In Button */}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleGoogleSignIn}
+                className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2.5 text-sm cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.04c1.64 0 3.12.56 4.28 1.67l3.2-3.2C17.52 1.58 14.96 1 12 1 7.35 1 3.39 3.67 1.45 7.56l3.85 2.99c.9-2.7 3.42-4.51 6.7-4.51z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.43h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.66 2.84c2.14-1.97 3.39-4.88 3.39-8.48z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.3 14.93c-.23-.69-.36-1.42-.36-2.18s.13-1.49.36-2.18L1.45 7.56C.52 9.42 0 11.48 0 12.75s.52 3.33 1.45 5.19l3.85-3.01z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.66-2.84c-1.01.68-2.31 1.09-3.8 1.09-3.28 0-5.8-1.81-6.7-4.51l-3.85 2.99C3.39 20.33 7.35 23 12 23z"
+                  />
+                </svg>
+                <span>
+                  {isArabic ? "تسجيل الدخول باستخدام حساب جوجل" : "Sign in with Google"}
+                </span>
+              </button>
+            </>
+          )}
 
           {/* Toggle Button */}
           <div className="mt-5 text-center text-xs text-slate-500 border-t border-slate-100 pt-4">
