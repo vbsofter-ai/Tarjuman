@@ -1037,8 +1037,8 @@ export default function App() {
       <header className="bg-white border-b border-slate-100 px-4 sm:px-6 py-4 sticky top-0 z-40 shadow-sm backdrop-blur-md bg-white/90">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-600/10">
-              <Languages className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md shadow-indigo-600/10 flex items-center justify-center bg-slate-50 border border-slate-100">
+              <img src="/logo.png" alt="Tarjuman AI Logo" className="w-8 h-8 object-contain" />
             </div>
             <div>
               <h1 className="font-bold text-lg text-slate-900 tracking-tight flex items-center gap-1.5">
@@ -1222,6 +1222,8 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      <AdBanner />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">

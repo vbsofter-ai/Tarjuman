@@ -25,6 +25,9 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "ترجمان: بوابة الترجمة المهنية المعتمدة بالذكاء الاصطناعي",
     description: "ترجمة نصوص ومستندات كاملة مع الحفاظ على التنسيق والتبصّرات اللغوية لـ 15 لغة عالمية.",
+  },
+  icons: {
+    icon: "/favicon.png",
   }
 };
 
