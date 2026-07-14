@@ -72,13 +72,7 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
           }
 
           const extracted = fullText.trim();
-          if (!extracted) {
-            throw new Error(
-              isArabic 
-                ? "لم نتمكن من استخراج أي نص من ملف PDF هذا. قد يكون ملفاً ممسوحاً ضوئياً (صورة)." 
-                : "No extractable text found in this PDF. It might be a scanned document (image)."
-            );
-          }
+          const finalExtracted = extracted || "Scanned Document (AI Vision/OCR Translation Mode)";
 
           // Also get base64 for download / metadata representation
           const base64Reader = new FileReader();
@@ -91,7 +85,7 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
               size: file.size,
               mimeType: "application/pdf",
               data: base64Data,
-              extractedText: extracted,
+              extractedText: finalExtracted,
             });
             setIsExtracting(false);
           };
@@ -243,10 +237,17 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
               <p className="text-xs font-semibold text-slate-700 truncate max-w-[200px] sm:max-w-[300px]">
                 {selectedFile.name}
               </p>
-              <p className="text-[10px] text-indigo-600/80 font-medium">
-                {formatFileSize(selectedFile.size)} •{" "}
-                {selectedFile.mimeType.split("/")[1]?.toUpperCase() || "DOC"}
-              </p>
+              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                <p className="text-[10px] text-indigo-600/80 font-medium">
+                  {formatFileSize(selectedFile.size)} •{" "}
+                  {selectedFile.mimeType.split("/")[1]?.toUpperCase() || "DOC"}
+                </p>
+                {selectedFile.extractedText === "Scanned Document (AI Vision/OCR Translation Mode)" && (
+                  <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded">
+                    {isArabic ? "ممسوح ضوئياً (ترجمة بصرية)" : "Scanned PDF (AI Vision Mode)"}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

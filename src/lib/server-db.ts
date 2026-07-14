@@ -7,8 +7,8 @@ dotenv.config();
 const pool = mysql.createPool({
   host: process.env.DATABASE_HOST || "31.97.198.49",
   port: parseInt(process.env.DATABASE_PORT || "3306", 10),
-  database: process.env.DATABASE_NAME || "u170392488_Tarjuman",
-  user: process.env.DATABASE_USER || "u170392488_Tarjuman",
+  database: process.env.DATABASE_NAME || "u170392488_smarttoolkit",
+  user: process.env.DATABASE_USER || "u170392488_smarttoolkit",
   password: process.env.DATABASE_PASSWORD || "M0h@mm@d@Tef1976_2026",
   waitForConnections: true,
   connectionLimit: 10,
@@ -17,6 +17,7 @@ const pool = mysql.createPool({
 
 // Resilient Fallback Mode State
 let isFallbackMode = false;
+let isInitialized = false;
 
 // Seed initial in-memory tables
 let fallbackUsers: any[] = [
@@ -94,7 +95,7 @@ let fallbackUsers: any[] = [
 
 let fallbackSystemConfig: Record<string, any> = {
   defaultFreeLimit: 5000,
-  translationEngine: "gemini-2.5-flash",
+  translationEngine: "gemini-3.5-flash",
   requireAuthForUpload: true,
   maintenanceMode: false,
   enableLinguisticAnalysis: true,
@@ -110,6 +111,7 @@ let fallbackLogs: any[] = [
 
 // Initialize database tables
 export async function initializeDatabase() {
+  if (isInitialized) return;
   let conn;
   try {
     console.log("[DB] Connecting to MySQL database...");
@@ -176,7 +178,7 @@ export async function initializeDatabase() {
     if (configRows[0].count === 0) {
       const defaultConfig = {
         defaultFreeLimit: 5000,
-        translationEngine: "gemini-2.5-flash",
+        translationEngine: "gemini-3.5-flash",
         requireAuthForUpload: true,
         maintenanceMode: false,
         enableLinguisticAnalysis: true,
@@ -217,16 +219,24 @@ export async function initializeDatabase() {
       console.log("[DB] Seeded baseline transaction logs.");
     }
 
+    isInitialized = true;
   } catch (error) {
-    console.error("[DB] Database initialization failed. Using professional in-memory fallback database.");
+    console.error("[DB] Database initialization failed. Using professional in-memory fallback database:", error);
     isFallbackMode = true;
   } finally {
     if (conn) conn.release();
   }
 }
 
+async function ensureInitialized() {
+  if (!isInitialized && !isFallbackMode) {
+    await initializeDatabase();
+  }
+}
+
 // Database helper functions
 export async function getUsers() {
+  await ensureInitialized();
   if (isFallbackMode) {
     return fallbackUsers;
   }
@@ -241,6 +251,7 @@ export async function getUsers() {
 }
 
 export async function getUserByEmail(email: string) {
+  await ensureInitialized();
   if (isFallbackMode) {
     return fallbackUsers.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
   }
@@ -255,6 +266,7 @@ export async function getUserByEmail(email: string) {
 }
 
 export async function createUser(user: { id: string; name: string; email: string; plan: string; quotaLimit: number; preferredDomain: string; role?: string; permissions?: string | string[] }) {
+  await ensureInitialized();
   const nowStr = new Date().toISOString().split("T")[0];
   const lastActiveStr = new Date().toISOString().replace("T", " ").substring(0, 16);
   const role = user.role || "user";
@@ -322,6 +334,7 @@ export async function createUser(user: { id: string; name: string; email: string
 }
 
 export async function updateUser(user: { id: string; name: string; email: string; plan: string; quotaUsed: number; quotaLimit: number; status: string; role?: string; permissions?: string | string[] }) {
+  await ensureInitialized();
   const role = user.role || "user";
   let permissions = typeof user.permissions === "object" ? JSON.stringify(user.permissions) : user.permissions;
   if (!permissions) {
@@ -388,6 +401,7 @@ export async function updateUser(user: { id: string; name: string; email: string
 }
 
 export async function updateUserQuota(email: string, wordCount: number) {
+  await ensureInitialized();
   if (isFallbackMode) {
     fallbackUsers = fallbackUsers.map(u => {
       if (u.email.toLowerCase() === email.toLowerCase()) {
@@ -416,6 +430,7 @@ export async function updateUserQuota(email: string, wordCount: number) {
 }
 
 export async function updateLastActive(email: string) {
+  await ensureInitialized();
   const lastActiveStr = new Date().toISOString().replace("T", " ").substring(0, 16);
   if (isFallbackMode) {
     fallbackUsers = fallbackUsers.map(u => {
@@ -445,6 +460,7 @@ export async function updateLastActive(email: string) {
 }
 
 export async function updateUserStatus(id: string, status: string) {
+  await ensureInitialized();
   if (isFallbackMode) {
     fallbackUsers = fallbackUsers.map(u => {
       if (u.id === id) {
@@ -473,6 +489,7 @@ export async function updateUserStatus(id: string, status: string) {
 }
 
 export async function getSystemConfig() {
+  await ensureInitialized();
   if (isFallbackMode) {
     return fallbackSystemConfig;
   }
@@ -496,6 +513,7 @@ export async function getSystemConfig() {
 }
 
 export async function updateSystemConfig(config: Record<string, any>) {
+  await ensureInitialized();
   if (isFallbackMode) {
     fallbackSystemConfig = { ...fallbackSystemConfig, ...config };
     return;
@@ -518,6 +536,7 @@ export async function updateSystemConfig(config: Record<string, any>) {
 }
 
 export async function getLogs() {
+  await ensureInitialized();
   if (isFallbackMode) {
     return fallbackLogs.map((r: any) => ({
       id: `log-${r.id}`,
@@ -551,6 +570,7 @@ export async function getLogs() {
 }
 
 export async function logAction(action: string, type: string, details: string) {
+  await ensureInitialized();
   if (isFallbackMode) {
     fallbackLogs.unshift({
       id: Date.now() + Math.floor(Math.random() * 1000),
@@ -587,6 +607,7 @@ export async function logAction(action: string, type: string, details: string) {
 }
 
 export async function deleteUser(id: string) {
+  await ensureInitialized();
   if (isFallbackMode) {
     fallbackUsers = fallbackUsers.filter(u => u.id !== id);
     return;
@@ -599,4 +620,3 @@ export async function deleteUser(id: string) {
     fallbackUsers = fallbackUsers.filter(u => u.id !== id);
   }
 }
-

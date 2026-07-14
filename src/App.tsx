@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useRef } from "react";
 import {
   Languages,
@@ -783,7 +785,12 @@ export default function App() {
     }
 
     // Word count calculation
-    const wordCount = textToTranslate.trim().split(/\s+/).filter(Boolean).length || 50;
+    const wordCount = 
+      (textToTranslate.trim().split(/\s+/).filter(Boolean).length) || 
+      (fileToTranslate?.extractedText && fileToTranslate.extractedText !== "Scanned Document (AI Vision/OCR Translation Mode)" 
+        ? fileToTranslate.extractedText.trim().split(/\s+/).filter(Boolean).length 
+        : 0) || 
+      500; // Fallback to 500 words for scanned/multimodal document translation
 
     // Quota and Auth Gates
     if (currentUser) {
@@ -1300,7 +1307,7 @@ export default function App() {
                     </div>
                     <select
                       value={domain}
-                      onChange={(e) => setDomain(e.target.value)}
+                      onChange={(e) => setDomain(e.target.value as DomainCode)}
                       className={`w-full bg-slate-50/70 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 text-sm font-semibold rounded-xl py-2.5 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer text-slate-800 appearance-none ${
                         isArabic ? "pr-3.5 pl-10 text-right" : "pl-11 pr-3.5 text-left"
                       }`}
@@ -1332,7 +1339,7 @@ export default function App() {
                   <div className="relative">
                     <select
                       value={tone}
-                      onChange={(e) => setTone(e.target.value)}
+                      onChange={(e) => setTone(e.target.value as ToneCode)}
                       className={`w-full bg-slate-50/70 hover:bg-slate-100/80 border border-slate-200 hover:border-slate-300 text-sm font-semibold rounded-xl py-2.5 outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer text-slate-800 appearance-none ${
                         isArabic ? "pr-3.5 pl-10 text-right" : "pl-3.5 pr-10 text-left"
                       }`}
