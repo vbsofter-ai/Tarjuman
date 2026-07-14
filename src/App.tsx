@@ -58,6 +58,7 @@ import { HistorySidebar } from "./components/HistorySidebar";
 import { AuthModal } from "./components/AuthModal";
 import { PricingTable } from "./components/PricingTable";
 import AdminDashboard from "./components/AdminDashboard";
+import AdBanner from "./components/AdBanner";
 
 function TypewriterTranslation({ text }: { text: string }) {
   const [displayedText, setDisplayedText] = useState("");
@@ -1977,6 +1978,8 @@ export default function App() {
           </>
         )}
       </AnimatePresence>
+
+      <AdBanner />
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-100 py-6 text-center text-xs text-slate-400 mt-12">

