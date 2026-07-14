@@ -186,6 +186,19 @@ export async function initializeDatabase() {
     `);
     console.log("[DB] Created/Verified 'tarjuman_visits' table.");
 
+    // Create feedback table
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS tarjuman_feedback (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        email VARCHAR(100),
+        rating INT NOT NULL,
+        comment TEXT,
+        details TEXT
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log("[DB] Created/Verified 'tarjuman_feedback' table.");
+
     // Promote romyatef@gmail.com to super_admin in database and set all permissions
     const superAdminPerms = JSON.stringify(["super_admin", "dashboard", "users_view", "users_manage", "config_manage", "logs_view", "translate", "upload_files", "linguistic_analysis", "analytics_view"]);
     await conn.query(
@@ -802,4 +815,58 @@ export async function getAnalytics() {
     referrers,
     browsers
   };
+}
+
+export async function addFeedback(email: string | null, rating: number, comment: string, details?: string) {
+  await ensureInitialized();
+  if (isFallbackMode) {
+    fallbackLogs.unshift({
+      id: fallbackLogs.length + 1,
+      timestamp: new Date(),
+      action: "Feedback Submitted",
+      type: "info",
+      details: `Rating: ${rating}* - ${comment} (User: ${email || "anonymous"})`
+    });
+    return { success: true };
+  }
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    await conn.query(
+      "INSERT INTO tarjuman_feedback (email, rating, comment, details) VALUES (?, ?, ?, ?)",
+      [email, rating, comment, details || null]
+    );
+    return { success: true };
+  } catch (err) {
+    console.error("[DB] addFeedback error:", err);
+    throw err;
+  } finally {
+    if (conn) conn.release();
+  }
+}
+
+export async function getFeedback() {
+  await ensureInitialized();
+  if (isFallbackMode) {
+    return [
+      { id: 1, timestamp: new Date().toISOString(), email: "user1@example.com", rating: 5, comment: "مترجم رائع وسريع جداً، الدقة ممتازة!", details: null },
+      { id: 2, timestamp: new Date().toISOString(), email: "user2@example.com", rating: 4, comment: "Great tool, UI is neat.", details: null }
+    ];
+  }
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const [rows] = await conn.query("SELECT * FROM tarjuman_feedback ORDER BY timestamp DESC LIMIT 100");
+    return (rows as any[]).map(row => ({
+      ...row,
+      timestamp: row.timestamp ? new Date(row.timestamp).toISOString() : null
+    }));
+  } catch (err) {
+    console.error("[DB] getFeedback error:", err);
+    throw err;
+  } finally {
+    if (conn) conn.release();
+  }
 }

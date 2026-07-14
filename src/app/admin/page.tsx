@@ -123,9 +123,10 @@ export default function AdminPage() {
   });
   const [liveLogs, setLiveLogs] = useState<{ id: string; time: string; action: string; type: "info" | "success" | "warning"; details: string }[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [feedbacks, setFeedbacks] = useState<{ id: number; timestamp: string; email: string | null; rating: number; comment: string; details: string | null }[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "analytics" | "settings" | "logs">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "analytics" | "settings" | "logs" | "feedbacks">("overview");
 
   // Search and Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -184,11 +185,12 @@ export default function AdminPage() {
       };
 
       try {
-        const [usersRes, configRes, logsRes, analyticsRes] = await Promise.all([
+        const [usersRes, configRes, logsRes, analyticsRes, feedbacksRes] = await Promise.all([
           fetch("/api/admin/users", { headers }),
           fetch("/api/admin/config", { headers }),
           fetch("/api/admin/logs", { headers }),
-          fetch("/api/analytics/data", { headers })
+          fetch("/api/analytics/data", { headers }),
+          fetch("/api/admin/feedback", { headers })
         ]);
 
         if (usersRes.ok) {
@@ -207,6 +209,10 @@ export default function AdminPage() {
           const analyticsData = await analyticsRes.json();
           if (analyticsData && !analyticsData.error) setAnalytics(analyticsData);
         }
+        if (feedbacksRes.ok) {
+          const feedbacksData = await feedbacksRes.json();
+          if (Array.isArray(feedbacksData)) setFeedbacks(feedbacksData);
+        }
       } catch (err) {
         console.error("Failed to fetch admin data:", err);
       } finally {
@@ -222,9 +228,10 @@ export default function AdminPage() {
         "x-admin-email": currentUser.email
       };
       try {
-        const [logsRes, analyticsRes] = await Promise.all([
+        const [logsRes, analyticsRes, feedbacksRes] = await Promise.all([
           fetch("/api/admin/logs", { headers }),
-          fetch("/api/analytics/data", { headers })
+          fetch("/api/analytics/data", { headers }),
+          fetch("/api/admin/feedback", { headers })
         ]);
         if (logsRes.ok) {
           const logsData = await logsRes.json();
@@ -233,6 +240,10 @@ export default function AdminPage() {
         if (analyticsRes.ok) {
           const analyticsData = await analyticsRes.json();
           if (analyticsData && !analyticsData.error) setAnalytics(analyticsData);
+        }
+        if (feedbacksRes.ok) {
+          const feedbacksData = await feedbacksRes.json();
+          if (Array.isArray(feedbacksData)) setFeedbacks(feedbacksData);
         }
       } catch (err) {
         console.error("Auto refresh error:", err);
@@ -575,6 +586,18 @@ export default function AdminPage() {
           >
             <Activity className="w-4 h-4" />
             <span>{isArabic ? "سجلات العمليات" : "Audit logs"}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("feedbacks")}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "feedbacks"
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10"
+                : "text-slate-400 hover:bg-slate-900 hover:text-white"
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{isArabic ? "آراء وتقييمات العملاء" : "Customer Feedbacks"}</span>
           </button>
 
           {/* Diagnostics Download */}
@@ -1081,6 +1104,77 @@ export default function AdminPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 6: CUSTOMER FEEDBACKS */}
+              {activeTab === "feedbacks" && (
+                <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 space-y-6">
+                  {/* Header */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-800 pb-3 gap-3">
+                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-slate-400" />
+                      <span>{isArabic ? "آراء وتقييمات العملاء المباشرة" : "Customer Ratings & Feedback Logs"}</span>
+                    </h4>
+
+                    {/* Stats summary */}
+                    <div className="flex gap-4 text-xs font-semibold text-slate-400">
+                      <div className="bg-slate-900 border border-slate-800 rounded-2xl px-4 py-2 flex items-center gap-2">
+                        <span>{isArabic ? "متوسط التقييم:" : "Average Rating:"}</span>
+                        <span className="text-amber-400 font-bold">
+                          {feedbacks.length 
+                            ? (feedbacks.reduce((acc, f) => acc + f.rating, 0) / feedbacks.length).toFixed(1)
+                            : "0.0"} ★
+                        </span>
+                      </div>
+                      <div className="bg-slate-900 border border-slate-800 rounded-2xl px-4 py-2 flex items-center gap-2">
+                        <span>{isArabic ? "إجمالي الآراء:" : "Total Submissions:"}</span>
+                        <span className="text-white font-bold">{feedbacks.length}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Feedbacks list */}
+                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                    {feedbacks.length === 0 ? (
+                      <div className="text-center py-10 text-slate-500 text-xs">
+                        {isArabic ? "لا توجد تقييمات أو ملاحظات مسجلة بعد." : "No user feedbacks have been recorded yet."}
+                      </div>
+                    ) : (
+                      feedbacks.map((f) => (
+                        <div key={f.id} className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800 text-left flex flex-col sm:flex-row gap-4 items-start justify-between">
+                          <div className="space-y-2 flex-1">
+                            {/* Stars & email */}
+                            <div className="flex flex-wrap items-center gap-3">
+                              <div className="flex items-center gap-0.5">
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <span key={s} className={s <= f.rating ? "text-amber-400 text-sm" : "text-slate-700 text-sm"}>★</span>
+                                ))}
+                              </div>
+                              <span className="text-[10px] font-extrabold text-slate-500 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-full font-mono">
+                                {f.email || "anonymous"}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-bold font-mono">
+                                {f.timestamp ? f.timestamp.replace("T", " ").substring(0, 19) : ""}
+                              </span>
+                            </div>
+
+                            {/* Comment */}
+                            <p className="text-slate-200 text-xs font-semibold leading-relaxed">
+                              {f.comment || <span className="text-slate-600 italic">{isArabic ? "(لا توجد تعليقات مكتوبة)" : "(No written comment)"}</span>}
+                            </p>
+
+                            {/* Details context */}
+                            {f.details && (
+                              <p className="text-[10px] text-slate-500 font-bold font-mono">
+                                {f.details}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

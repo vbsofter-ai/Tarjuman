@@ -163,6 +163,13 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState("");
 
+  // Feedback states
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [hoveredRating, setHoveredRating] = useState<number | null>(null);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+
   // Authenticated User & Pricing subscription states
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -266,6 +273,40 @@ export default function App() {
       localStorage.setItem("tarjuman_domain", domain);
     }
   }, [sourceLang, targetLang, domain]);
+
+  // Reset feedback widget when text changes
+  useEffect(() => {
+    setUserRating(null);
+    setHoveredRating(null);
+    setFeedbackComment("");
+    setFeedbackSubmitted(false);
+  }, [sourceText]);
+
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userRating) return;
+
+    setFeedbackLoading(true);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: currentUser?.email || "anonymous",
+          rating: userRating,
+          comment: feedbackComment.trim(),
+          details: `Source: ${sourceLang} -> Target: ${targetLang} | Domain: ${domain}`
+        })
+      });
+      if (res.ok) {
+        setFeedbackSubmitted(true);
+      }
+    } catch (err) {
+      console.error("Feedback submit error:", err);
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
 
   // Save history helper
   const saveHistoryToStorage = (newHistory: HistoryItem[]) => {
@@ -1092,31 +1133,32 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Pricing list button */}
             <button
               onClick={() => setShowPricingModal(true)}
-              className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 text-indigo-600 hover:bg-indigo-50 border border-indigo-100 rounded-xl transition-all shadow-sm bg-white cursor-pointer"
+              className="flex items-center gap-1.5 text-xs font-bold px-2 py-1.5 sm:px-3 sm:py-2 text-indigo-600 hover:bg-indigo-50 border border-indigo-100 rounded-xl transition-all shadow-sm bg-white cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>{isArabic ? "خطط الأسعار" : "Pricing"}</span>
+              <span className="hidden xs:inline">{isArabic ? "الأسعار" : "Pricing"}</span>
             </button>
 
             {/* Language interface toggle */}
             <button
               onClick={() => setUiLang(isArabic ? "en" : "ar")}
-              className="text-xs font-semibold px-3 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl transition-all shadow-sm bg-white cursor-pointer"
+              className="text-xs font-semibold px-2 py-1.5 sm:px-3 sm:py-2 border border-slate-200 hover:bg-slate-50 rounded-xl transition-all shadow-sm bg-white cursor-pointer"
             >
-              {isArabic ? "English (EN)" : "العربية (AR)"}
+              <span className="xs:hidden">{isArabic ? "EN" : "AR"}</span>
+              <span className="hidden xs:inline">{isArabic ? "English" : "العربية"}</span>
             </button>
 
             {/* History drawer button */}
             <button
               onClick={() => setShowHistorySidebar(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 text-slate-700 hover:text-indigo-600 border border-slate-200 hover:bg-indigo-50/30 rounded-xl transition-all shadow-sm bg-white cursor-pointer"
+              className="flex items-center gap-1.5 text-xs font-semibold px-2 py-1.5 sm:px-3.5 sm:py-2 text-slate-700 hover:text-indigo-600 border border-slate-200 hover:bg-indigo-50/30 rounded-xl transition-all shadow-sm bg-white cursor-pointer"
             >
               <History className="w-4 h-4" />
-              <span className="hidden md:inline">{isArabic ? "السجل" : "History"}</span>
+              <span className="hidden sm:inline">{isArabic ? "السجل" : "History"}</span>
             </button>
 
             {/* Authentication Gateway Dropdown Widget */}
@@ -1868,6 +1910,87 @@ export default function App() {
                 </li>
               </ul>
             </div>
+
+            {/* User Translation Rating & Feedback Card */}
+            {translatedText && (
+              <motion.div
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 text-right"
+                dir="rtl"
+              >
+                <div className="flex items-center gap-2 pb-2.5 border-b border-slate-100">
+                  <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <Sparkles className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-slate-800">
+                      {isArabic ? "ما تقييمك لجودة الترجمة؟" : "Rate Translation Quality"}
+                    </h4>
+                    <p className="text-[10px] text-slate-500 font-medium">
+                      {isArabic ? "ملاحظاتك تساعدنا في تطوير محرك الذكاء الاصطناعي" : "Your feedback optimizes our neural translation models"}
+                    </p>
+                  </div>
+                </div>
+
+                {feedbackSubmitted ? (
+                  <div className="text-center py-4 space-y-2 animate-in fade-in duration-300">
+                    <div className="w-10 h-10 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full flex items-center justify-center mx-auto shadow-sm">
+                      <Check className="w-5 h-5" />
+                    </div>
+                    <h5 className="text-xs font-bold text-slate-800">
+                      {isArabic ? "نشكرك على مشاركتنا رأيك!" : "Thank you for your rating!"}
+                    </h5>
+                    <p className="text-[10px] text-slate-500">
+                      {isArabic ? "تم تسجيل تقييمك وملاحظاتك بنجاح في النظام." : "Your review has been successfully stored in our database."}
+                    </p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleFeedbackSubmit} className="space-y-3">
+                    {/* Stars row */}
+                    <div className="flex items-center justify-center gap-1.5 py-1">
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const isStarred = hoveredRating ? star <= hoveredRating : (userRating ? star <= userRating : false);
+                        return (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setUserRating(star)}
+                            onMouseEnter={() => setHoveredRating(star)}
+                            onMouseLeave={() => setHoveredRating(null)}
+                            className="text-2xl transition-all duration-150 transform hover:scale-125 cursor-pointer focus:outline-none bg-transparent border-0"
+                          >
+                            <span className={isStarred ? "text-amber-400" : "text-slate-200"}>★</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Text area */}
+                    <div className="space-y-1">
+                      <textarea
+                        value={feedbackComment}
+                        onChange={(e) => setFeedbackComment(e.target.value)}
+                        placeholder={isArabic ? "اكتب أي ملاحظات أو مقترحات هنا (اختياري)..." : "Write any suggestions or remarks (optional)..."}
+                        className="w-full min-h-[60px] p-2.5 text-[11px] border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:border-indigo-500 transition-all placeholder-slate-400"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!userRating || feedbackLoading}
+                      className="w-full bg-slate-900 hover:bg-slate-850 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-xl text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {feedbackLoading ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <span>{isArabic ? "إرسال التقييم" : "Submit Review"}</span>
+                      )}
+                    </button>
+                  </form>
+                )}
+              </motion.div>
+            )}
           </div>
         </div>
 

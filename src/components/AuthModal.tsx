@@ -262,55 +262,59 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-3xl max-w-md w-full border border-slate-100 shadow-2xl overflow-hidden relative">
+    <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+      {/* Decorative background glows */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full bg-purple-500/5 blur-3xl pointer-events-none"></div>
+
+      <div className="bg-slate-900/90 backdrop-blur-2xl border border-slate-800/80 rounded-3xl max-w-md w-full shadow-2xl relative overflow-hidden text-slate-100 flex flex-col max-h-[92vh]">
         {/* Pattern Background */}
-        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-tr from-indigo-600 to-indigo-500 overflow-hidden">
-          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
-          <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-indigo-400/25 blur-xl"></div>
-          <div className="absolute top-4 right-10 w-16 h-16 rounded-full bg-indigo-300/35 blur-lg"></div>
+        <div className="absolute top-0 left-0 right-0 h-36 bg-gradient-to-tr from-indigo-500/10 via-purple-500/5 to-transparent border-b border-slate-800/40 overflow-hidden pointer-events-none">
+          <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
+          <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-indigo-500/20 blur-xl"></div>
+          <div className="absolute top-4 right-10 w-16 h-16 rounded-full bg-indigo-400/15 blur-lg"></div>
         </div>
 
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 left-4 p-1.5 rounded-xl bg-white/20 text-white hover:bg-white/30 active:scale-95 transition-all z-10"
+          className="absolute top-4 left-4 p-2 rounded-xl bg-slate-800/40 border border-slate-700/50 text-slate-400 hover:text-white hover:bg-slate-800/80 active:scale-95 transition-all z-10 cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
 
         {/* Header Title inside banner */}
-        <div className="relative pt-10 px-6 pb-6 text-white text-center">
-          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 mx-auto shadow-lg mb-2">
-            <Sparkles className="w-6 h-6 animate-pulse" />
+        <div className="relative pt-8 px-6 pb-4 text-center">
+          <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center mx-auto shadow-md mb-2">
+            <Sparkles className="w-5 h-5 animate-pulse" />
           </div>
-          <h3 className="font-bold text-lg">
+          <h3 className="font-black text-base tracking-tight text-white">
             {isArabic ? "بوابة ترجمان الذكية" : "Tarjuman AI Gateway"}
           </h3>
-          <p className="text-xs text-indigo-100 mt-1">
+          <p className="text-[10px] text-slate-400 mt-1 max-w-xs mx-auto leading-normal">
             {isArabic
               ? "سجل دخولك لحفظ قواميسك وسجل عملياتك وزيادة كفاءة الترجمة"
               : "Sign in to save glossary terms, sync history, and unlock limits"}
           </p>
         </div>
 
-        {/* Content Area */}
-        <div className="p-6">
+        {/* Scrollable Content Area */}
+        <div className="p-6 overflow-y-auto flex-1 space-y-4 pr-6 pl-6">
           {error && (
-            <div className="bg-rose-50 border border-rose-100 text-rose-700 text-xs p-3 rounded-xl mb-4 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs p-3 rounded-2xl flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {showGoogleMock ? (
             <form onSubmit={handleGoogleMockSubmit} className="space-y-4">
-              <div className="bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs p-3.5 rounded-xl mb-2 space-y-1 text-right" dir="rtl">
-                <h4 className="font-extrabold flex items-center gap-1.5 text-indigo-700">
+              <div className="bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[11px] p-3.5 rounded-2xl space-y-1 text-right" dir="rtl">
+                <h4 className="font-bold flex items-center gap-1.5 text-indigo-400">
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>تسجيل الدخول التجريبي بحساب جوجل (Google Sandbox)</span>
                 </h4>
-                <p className="text-slate-600 leading-normal">
+                <p className="text-slate-400 leading-normal">
                   {isArabic 
                     ? "لم يتم العثور على NEXT_PUBLIC_GOOGLE_CLIENT_ID في ملف الإعدادات. للتجربة السريعة، يرجى كتابة بريدك الإلكتروني والاسم:" 
                     : "No Google Client ID configured in your configurations. For local testing, please enter any email and name to sign in:"}
@@ -318,34 +322,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">
+                <label className="block text-[10px] font-extrabold text-slate-400 mb-1.5 uppercase tracking-wider">
                   {isArabic ? "بريد جوجل الإلكتروني" : "Google Email Address"}
                 </label>
                 <div className="relative">
-                  <Mail className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
+                  <Mail className="absolute top-3 right-3 text-slate-500 w-4 h-4" />
                   <input
                     type="email"
                     required
                     placeholder="yourname@gmail.com"
                     value={googleEmail}
                     onChange={(e) => setGoogleEmail(e.target.value)}
-                    className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-left font-bold"
+                    className="w-full text-base md:text-xs pr-10 pl-4 py-2.5 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-white placeholder-slate-600 focus:outline-none transition-all duration-300 text-left font-bold"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">
+                <label className="block text-[10px] font-extrabold text-slate-400 mb-1.5 uppercase tracking-wider">
                   {isArabic ? "الاسم الكامل (اختياري)" : "Full Name (Optional)"}
                 </label>
                 <div className="relative">
-                  <UserIcon className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
+                  <UserIcon className="absolute top-3 right-3 text-slate-500 w-4 h-4" />
                   <input
                     type="text"
                     placeholder="Ramy Atef"
                     value={googleName}
                     onChange={(e) => setGoogleName(e.target.value)}
-                    className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors text-left font-bold"
+                    className="w-full text-base md:text-xs pr-10 pl-4 py-2.5 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-white placeholder-slate-600 focus:outline-none transition-all duration-300 text-left font-bold"
                   />
                 </div>
               </div>
@@ -354,14 +358,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowGoogleMock(false)}
-                  className="flex-1 border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold py-2.5 px-4 rounded-xl text-xs transition-all cursor-pointer"
+                  className="flex-1 bg-slate-850 hover:bg-slate-800 text-slate-300 font-bold py-2.5 px-4 rounded-2xl text-xs border border-slate-800 hover:border-slate-700 transition-all cursor-pointer"
                 >
                   {isArabic ? "رجوع" : "Back"}
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-md shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-1.5"
+                  className="flex-1 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-2xl text-xs transition-all shadow-lg shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   {loading ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -376,58 +380,58 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <form onSubmit={handleSubmit} className="space-y-4">
                 {!isLogin && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    <label className="block text-[10px] font-extrabold text-slate-400 mb-1.5 uppercase tracking-wider">
                       {isArabic ? "الاسم الكامل" : "Full Name"}
                     </label>
                     <div className="relative">
-                      <UserIcon className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
+                      <UserIcon className="absolute top-3.5 right-3 text-slate-500 w-4 h-4" />
                       <input
                         type="text"
                         required
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         placeholder={isArabic ? "مثال: رامي عاطف" : "e.g. John Doe"}
-                        className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                        className="w-full text-base md:text-sm pr-9 pl-3 py-3 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-white placeholder-slate-600 focus:outline-none transition-all duration-300"
                       />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                  <label className="block text-[10px] font-extrabold text-slate-400 mb-1.5 uppercase tracking-wider">
                     {isArabic ? "البريد الإلكتروني" : "Email Address"}
                   </label>
                   <div className="relative">
-                    <Mail className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
+                    <Mail className="absolute top-3.5 right-3 text-slate-500 w-4 h-4" />
                     <input
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={isArabic ? "example@mail.com" : "name@example.com"}
-                      className="w-full text-sm pr-9 pl-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                      className="w-full text-base md:text-sm pr-9 pl-3 py-3 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-white placeholder-slate-600 focus:outline-none transition-all duration-300"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                  <label className="block text-[10px] font-extrabold text-slate-400 mb-1.5 uppercase tracking-wider">
                     {isArabic ? "كلمة المرور" : "Password"}
                   </label>
                   <div className="relative">
-                    <Lock className="absolute top-3 right-3 text-slate-400 w-4 h-4" />
+                    <Lock className="absolute top-3.5 right-3 text-slate-500 w-4 h-4" />
                     <input
                       type={showPassword ? "text" : "password"}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full text-sm pr-9 pl-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                      className="w-full text-base md:text-sm pr-9 pl-10 py-3 bg-slate-950/60 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-2xl text-white placeholder-slate-600 focus:outline-none transition-all duration-300"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute top-3 left-3 text-slate-400 hover:text-slate-600"
+                      className="absolute top-3.5 left-3 text-slate-500 hover:text-slate-300"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -437,7 +441,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-xl transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 flex items-center justify-center gap-2 mt-2 text-sm"
+                  className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-600 active:scale-95 disabled:opacity-50 text-white font-bold py-3 px-4 rounded-2xl transition-all shadow-lg shadow-indigo-600/10 hover:shadow-indigo-600/20 flex items-center justify-center gap-2 mt-2 text-sm cursor-pointer"
                 >
                   {loading ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -458,9 +462,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Divider */}
               <div className="relative my-4 flex items-center justify-center">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-100"></div>
+                  <div className="w-full border-t border-slate-800/80"></div>
                 </div>
-                <span className="relative bg-white px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <span className="relative bg-slate-900 px-3 text-[9px] font-extrabold text-slate-500 uppercase tracking-widest">
                   {isArabic ? "أو" : "OR"}
                 </span>
               </div>
@@ -468,13 +472,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Google Sign-In Button */}
               <div className="w-full flex flex-col items-center gap-2 mt-2">
                 {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? (
-                  <div id="google-signin-btn-container" className="w-full flex justify-center py-1"></div>
+                  <div id="google-signin-btn-container" className="w-full flex justify-center py-1 bg-white rounded-2xl p-1 border border-slate-200"></div>
                 ) : (
                   <button
                     type="button"
                     disabled={loading}
                     onClick={handleGoogleSignIn}
-                    className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2.5 text-sm cursor-pointer active:scale-95 disabled:opacity-50"
+                    className="w-full bg-slate-950/80 hover:bg-slate-900 border border-slate-800 text-slate-300 font-bold py-2.5 px-4 rounded-2xl transition-all flex items-center justify-center gap-2.5 text-xs cursor-pointer active:scale-95 disabled:opacity-50"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
                       <path
@@ -504,14 +508,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           )}
 
           {/* Toggle Button */}
-          <div className="mt-5 text-center text-xs text-slate-500 border-t border-slate-100 pt-4">
+          <div className="mt-5 text-center text-xs text-slate-500 border-t border-slate-800/80 pt-4">
             {isLogin ? (
               <p>
                 {isArabic ? "ليس لديك حساب؟" : "Don't have an account?"}{" "}
                 <button
                   type="button"
                   onClick={() => setIsLogin(false)}
-                  className="text-indigo-600 font-bold hover:underline transition-colors"
+                  className="text-indigo-400 font-bold hover:text-indigo-300 transition-colors cursor-pointer hover:underline"
                 >
                   {isArabic ? "سجل حسابك مجاناً الآن" : "Create one for free"}
                 </button>
@@ -522,7 +526,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsLogin(true)}
-                  className="text-indigo-600 font-bold hover:underline transition-colors"
+                  className="text-indigo-400 font-bold hover:text-indigo-300 transition-colors cursor-pointer hover:underline"
                 >
                   {isArabic ? "تسجيل الدخول مباشرة" : "Sign in here"}
                 </button>
