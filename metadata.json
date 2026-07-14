@@ -1,0 +1,6 @@
+{
+  "name": "Smart AI Translator (Tarjuman)",
+  "description": "A professional AI-powered translation tool supporting text, files, and images across various specialized domains (legal, medical, financial) with glossary terms, speech synthesis, and linguistic analysis.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
