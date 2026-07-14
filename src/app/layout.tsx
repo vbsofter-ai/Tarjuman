@@ -105,7 +105,7 @@ export default function RootLayout({
         {children}
         <Script
           src="https://armsbroodelusive.com/36/21/a0/3621a0fd09388e1d44ba266b82228a1e.js"
-          strategy="afterInteractive"
+          strategy="lazyOnload"
         />
       </body>
     </html>
