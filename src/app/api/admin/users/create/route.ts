@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
-import { getUsers, getUserByEmail, createUser, logAction } from "@/src/lib/server-db";
+import { getUsers, getUserByEmail, createUser, logAction, isSuperAdmin } from "@/src/lib/server-db";
 
 export async function POST(req: Request) {
   try {
+    const adminEmail = req.headers.get("x-admin-email");
+    if (!adminEmail || !(await isSuperAdmin(adminEmail))) {
+      return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+    }
+
     const body = await req.json();
     const { name, email, plan, quotaLimit, preferredDomain, role, permissions } = body;
     const existing = await getUserByEmail(email);

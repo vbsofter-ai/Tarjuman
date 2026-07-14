@@ -32,8 +32,8 @@ let fallbackUsers: any[] = [
     joinedDate: "2026-03-12",
     lastActive: "2026-07-13 14:55",
     preferredDomain: "legal",
-    role: "admin",
-    permissions: JSON.stringify(["dashboard", "users_view", "users_manage", "config_manage", "logs_view", "translate", "upload_files", "linguistic_analysis"])
+    role: "super_admin",
+    permissions: JSON.stringify(["super_admin", "dashboard", "users_view", "users_manage", "config_manage", "logs_view", "translate", "upload_files", "linguistic_analysis", "analytics_view"])
   },
   {
     id: "usr-2",
@@ -173,6 +173,26 @@ export async function initializeDatabase() {
     `);
     console.log("[DB] Created/Verified 'tarjuman_logs' table.");
 
+    // Create visits table
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS tarjuman_visits (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ip_address VARCHAR(50),
+        user_agent TEXT,
+        referrer TEXT,
+        path VARCHAR(255)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log("[DB] Created/Verified 'tarjuman_visits' table.");
+
+    // Promote romyatef@gmail.com to super_admin in database and set all permissions
+    const superAdminPerms = JSON.stringify(["super_admin", "dashboard", "users_view", "users_manage", "config_manage", "logs_view", "translate", "upload_files", "linguistic_analysis", "analytics_view"]);
+    await conn.query(
+      "UPDATE tarjuman_users SET role = 'super_admin', permissions = ? WHERE email = 'romyatef@gmail.com'",
+      [superAdminPerms]
+    );
+
     // Seed default configuration if empty
     const [configRows]: any = await conn.query("SELECT COUNT(*) as count FROM tarjuman_system_config");
     if (configRows[0].count === 0) {
@@ -273,7 +293,9 @@ export async function createUser(user: { id: string; name: string; email: string
   
   let permissions = typeof user.permissions === "object" ? JSON.stringify(user.permissions) : user.permissions;
   if (!permissions) {
-    if (role === "admin") {
+    if (role === "super_admin") {
+      permissions = JSON.stringify(["super_admin", "dashboard", "users_view", "users_manage", "config_manage", "logs_view", "translate", "upload_files", "linguistic_analysis", "analytics_view"]);
+    } else if (role === "admin") {
       permissions = JSON.stringify(["dashboard", "users_view", "users_manage", "config_manage", "logs_view", "translate", "upload_files", "linguistic_analysis"]);
     } else if (role === "moderator") {
       permissions = JSON.stringify(["dashboard", "users_view", "users_manage", "logs_view", "translate", "upload_files"]);
@@ -619,4 +641,165 @@ export async function deleteUser(id: string) {
     isFallbackMode = true;
     fallbackUsers = fallbackUsers.filter(u => u.id !== id);
   }
+}
+
+// In-memory fallback visits log
+let fallbackVisits: any[] = [
+  { timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), ip_address: "192.168.1.1", user_agent: "Mozilla/5.0 (Windows NT 10.0)", referrer: "", path: "/" },
+  { timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), ip_address: "192.168.1.2", user_agent: "Mozilla/5.0 (Windows NT 10.0)", referrer: "", path: "/" },
+  { timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), ip_address: "192.168.1.1", user_agent: "Mozilla/5.0 (Macintosh)", referrer: "google.com", path: "/" },
+  { timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), ip_address: "192.168.1.3", user_agent: "Mozilla/5.0 (iPhone)", referrer: "", path: "/" },
+  { timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), ip_address: "192.168.1.4", user_agent: "Mozilla/5.0 (Windows NT 10.0)", referrer: "facebook.com", path: "/" },
+  { timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), ip_address: "192.168.1.5", user_agent: "Mozilla/5.0 (Windows NT 10.0)", referrer: "", path: "/" },
+  { timestamp: new Date(), ip_address: "192.168.1.6", user_agent: "Mozilla/5.0 (Windows NT 10.0)", referrer: "", path: "/" }
+];
+
+export async function isSuperAdmin(email: string): Promise<boolean> {
+  const user = await getUserByEmail(email);
+  return user?.role === "super_admin";
+}
+
+export async function trackVisit(ip: string, userAgent: string, referrer: string, path: string) {
+  await ensureInitialized();
+  if (isFallbackMode) {
+    fallbackVisits.push({
+      timestamp: new Date(),
+      ip_address: ip,
+      user_agent: userAgent,
+      referrer: referrer || "",
+      path: path || "/"
+    });
+    return;
+  }
+
+  try {
+    await pool.query(
+      "INSERT INTO tarjuman_visits (ip_address, user_agent, referrer, path) VALUES (?, ?, ?, ?)",
+      [ip, userAgent, referrer || "", path || "/"]
+    );
+  } catch (error) {
+    console.error("[DB] trackVisit failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    fallbackVisits.push({
+      timestamp: new Date(),
+      ip_address: ip,
+      user_agent: userAgent,
+      referrer: referrer || "",
+      path: path || "/"
+    });
+  }
+}
+
+export async function getAnalytics() {
+  await ensureInitialized();
+  
+  let visitsList: any[] = [];
+  let logsList: any[] = [];
+  let usersCount = 0;
+
+  if (isFallbackMode) {
+    visitsList = fallbackVisits;
+    logsList = fallbackLogs;
+    usersCount = fallbackUsers.length;
+  } else {
+    try {
+      const [vRows]: any = await pool.query("SELECT timestamp, ip_address, user_agent, referrer, path FROM tarjuman_visits");
+      visitsList = vRows;
+
+      const [lRows]: any = await pool.query("SELECT action FROM tarjuman_logs");
+      logsList = lRows;
+
+      const [uRows]: any = await pool.query("SELECT COUNT(*) as count FROM tarjuman_users");
+      usersCount = uRows[0].count;
+    } catch (error) {
+      console.error("[DB] getAnalytics failed, falling back to in-memory:", error);
+      isFallbackMode = true;
+      visitsList = fallbackVisits;
+      logsList = fallbackLogs;
+      usersCount = fallbackUsers.length;
+    }
+  }
+
+  // Calculate statistics
+  const totalVisits = visitsList.length;
+  const uniqueIPs = new Set(visitsList.map(v => v.ip_address));
+  const uniqueVisitors = uniqueIPs.size;
+  
+  // Total translations count (from logs)
+  const totalTranslations = logsList.filter(l => l.action === "Translation Request" || l.action === "Translation").length;
+
+  // Daily Trend (last 7 days)
+  const dailyTrendMap = new Map<string, { visits: number, visitors: Set<string> }>();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split("T")[0];
+    dailyTrendMap.set(dateStr, { visits: 0, visitors: new Set<string>() });
+  }
+
+  visitsList.forEach(v => {
+    const dateStr = new Date(v.timestamp).toISOString().split("T")[0];
+    if (dailyTrendMap.has(dateStr)) {
+      const dayData = dailyTrendMap.get(dateStr)!;
+      dayData.visits++;
+      dayData.visitors.add(v.ip_address);
+    }
+  });
+
+  const dailyTrend: any[] = [];
+  dailyTrendMap.forEach((val, key) => {
+    dailyTrend.push({
+      date: key,
+      visits: val.visits,
+      visitors: val.visitors.size
+    });
+  });
+
+  // Page views breakdown
+  const pathMap: Record<string, number> = {};
+  visitsList.forEach(v => {
+    const p = v.path || "/";
+    pathMap[p] = (pathMap[p] || 0) + 1;
+  });
+  const pageViews = Object.entries(pathMap).map(([path, count]) => ({ path, count })).sort((a, b) => b.count - a.count);
+
+  // Referrers breakdown
+  const refMap: Record<string, number> = {};
+  visitsList.forEach(v => {
+    let r = v.referrer || "Direct";
+    if (r.startsWith("http")) {
+      try {
+        r = new URL(r).hostname;
+      } catch {
+        // use default
+      }
+    }
+    refMap[r] = (refMap[r] || 0) + 1;
+  });
+  const referrers = Object.entries(refMap).map(([referrer, count]) => ({ referrer, count })).sort((a, b) => b.count - a.count);
+
+  // Browser family breakdown (simple parsing)
+  const browserMap: Record<string, number> = {};
+  visitsList.forEach(v => {
+    const ua = (v.user_agent || "").toLowerCase();
+    let b = "Other";
+    if (ua.includes("firefox")) b = "Firefox";
+    else if (ua.includes("chrome") && !ua.includes("edge") && !ua.includes("opr")) b = "Chrome";
+    else if (ua.includes("safari") && !ua.includes("chrome")) b = "Safari";
+    else if (ua.includes("edge")) b = "Edge";
+    else if (ua.includes("opera") || ua.includes("opr")) b = "Opera";
+    browserMap[b] = (browserMap[b] || 0) + 1;
+  });
+  const browsers = Object.entries(browserMap).map(([browser, count]) => ({ browser, count })).sort((a, b) => b.count - a.count);
+
+  return {
+    totalVisits,
+    uniqueVisitors,
+    totalTranslations,
+    totalUsers: usersCount,
+    dailyTrend,
+    pageViews,
+    referrers,
+    browsers
+  };
 }

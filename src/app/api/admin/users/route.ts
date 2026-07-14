@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
-import { getUsers } from "@/src/lib/server-db";
+import { getUsers, isSuperAdmin } from "@/src/lib/server-db";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const adminEmail = req.headers.get("x-admin-email");
+    if (!adminEmail || !(await isSuperAdmin(adminEmail))) {
+      return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+    }
+
     const usersList = await getUsers();
     return NextResponse.json(usersList);
   } catch (error: any) {

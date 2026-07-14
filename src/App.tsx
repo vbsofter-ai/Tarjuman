@@ -57,7 +57,6 @@ import { FileTranslator } from "./components/FileTranslator";
 import { HistorySidebar } from "./components/HistorySidebar";
 import { AuthModal } from "./components/AuthModal";
 import { PricingTable } from "./components/PricingTable";
-import AdminDashboard from "./components/AdminDashboard";
 import AdBanner from "./components/AdBanner";
 
 function TypewriterTranslation({ text }: { text: string }) {
@@ -156,7 +155,6 @@ export default function App() {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showUpgradeSuccess, setShowUpgradeSuccess] = useState(false);
   const [successPlanName, setSuccessPlanName] = useState("");
-  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
 
 
   // Refs
@@ -196,6 +194,16 @@ export default function App() {
 
   // Sync LocalStorage for history and glossary on startup
   useEffect(() => {
+    // Track site visit
+    fetch("/api/analytics/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        referrer: typeof document !== "undefined" ? document.referrer : "",
+        path: window.location.pathname
+      })
+    }).catch(err => console.error("Analytics tracking error:", err));
+
     const savedHistory = localStorage.getItem("tarjuman_history");
     const savedGlossary = localStorage.getItem("tarjuman_glossary");
 
@@ -1175,11 +1183,10 @@ export default function App() {
 
                         {/* Dropdown Options */}
                         <div className="space-y-1 pt-2 border-t border-slate-100">
-                          {currentUser?.email === "romyatef@gmail.com" && (
+                          {currentUser?.role === "super_admin" && (
                             <button
                               onClick={() => {
-                                setShowAdminDashboard(true);
-                                setShowProfileDropdown(false);
+                                window.location.href = "/admin";
                               }}
                               className="w-full text-right flex items-center gap-2 p-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                             >
@@ -1918,15 +1925,6 @@ export default function App() {
               </div>
             </motion.div>
           </div>
-        )}
-
-        {/* Professional Admin Management Dashboard */}
-        {showAdminDashboard && (
-          <AdminDashboard
-            isOpen={showAdminDashboard}
-            onClose={() => setShowAdminDashboard(false)}
-            isArabic={isArabic}
-          />
         )}
       </AnimatePresence>
 

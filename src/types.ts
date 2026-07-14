@@ -102,6 +102,8 @@ export interface User {
   plan: "free" | "pro" | "enterprise";
   quotaUsed: number;
   quotaLimit: number; // in words
+  role?: string;
+  permissions?: string;
 }
 
 export interface PricingPlan {
