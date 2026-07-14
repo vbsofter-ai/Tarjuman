@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Mail, Lock, User as UserIcon, Eye, EyeOff, Sparkles, LogIn, UserPlus } from "lucide-react";
 import { User } from "../types";
 
@@ -25,6 +25,84 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showGoogleMock, setShowGoogleMock] = useState(false);
   const [googleEmail, setGoogleEmail] = useState("");
   const [googleName, setGoogleName] = useState("");
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) return;
+
+    const initGoogleButton = () => {
+      const google = (window as any).google;
+      if (!google) return;
+
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: async (response: any) => {
+          setLoading(true);
+          setError("");
+          try {
+            // Decode Google JWT Credential payload (base64)
+            const base64Url = response.credential.split(".")[1];
+            const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+            const jsonPayload = decodeURIComponent(
+              atob(base64)
+                .split("")
+                .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+                .join("")
+            );
+            const payload = JSON.parse(jsonPayload);
+
+            const res = await fetch("/api/auth/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: payload.email,
+                name: payload.name || payload.given_name
+              })
+            });
+
+            const user = await res.json();
+            if (!res.ok || user.error) {
+              throw new Error(user.error || "Failed to authenticate via Google");
+            }
+
+            localStorage.setItem("tarjuman_current_user", JSON.stringify(user));
+            onAuthSuccess(user);
+            onClose();
+          } catch (err: any) {
+            setError(err.message || "Google Authentication error");
+          } finally {
+            setLoading(false);
+          }
+        }
+      });
+
+      const container = document.getElementById("google-signin-btn-container");
+      if (container) {
+        google.accounts.id.renderButton(container, {
+          theme: "outline",
+          size: "large",
+          width: "360",
+          text: "signin_with",
+          locale: isArabic ? "ar" : "en"
+        });
+      }
+    };
+
+    if (!(window as any).google) {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        initGoogleButton();
+      };
+      document.head.appendChild(script);
+    } else {
+      setTimeout(initGoogleButton, 100);
+    }
+  }, [isOpen, isArabic]);
 
   if (!isOpen) return null;
 
@@ -388,34 +466,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               {/* Google Sign-In Button */}
-              <button
-                type="button"
-                disabled={loading}
-                onClick={handleGoogleSignIn}
-                className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2.5 text-sm cursor-pointer active:scale-95 disabled:opacity-50"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.04c1.64 0 3.12.56 4.28 1.67l3.2-3.2C17.52 1.58 14.96 1 12 1 7.35 1 3.39 3.67 1.45 7.56l3.85 2.99c.9-2.7 3.42-4.51 6.7-4.51z"
-                  />
-                  <path
-                    fill="#4285F4"
-                    d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.43h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.66 2.84c2.14-1.97 3.39-4.88 3.39-8.48z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.3 14.93c-.23-.69-.36-1.42-.36-2.18s.13-1.49.36-2.18L1.45 7.56C.52 9.42 0 11.48 0 12.75s.52 3.33 1.45 5.19l3.85-3.01z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.66-2.84c-1.01.68-2.31 1.09-3.8 1.09-3.28 0-5.8-1.81-6.7-4.51l-3.85 2.99C3.39 20.33 7.35 23 12 23z"
-                  />
-                </svg>
-                <span>
-                  {isArabic ? "تسجيل الدخول باستخدام حساب جوجل" : "Sign in with Google"}
-                </span>
-              </button>
+              <div className="w-full flex flex-col items-center gap-2 mt-2">
+                {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? (
+                  <div id="google-signin-btn-container" className="w-full flex justify-center py-1"></div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={handleGoogleSignIn}
+                    className="w-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2.5 text-sm cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.04c1.64 0 3.12.56 4.28 1.67l3.2-3.2C17.52 1.58 14.96 1 12 1 7.35 1 3.39 3.67 1.45 7.56l3.85 2.99c.9-2.7 3.42-4.51 6.7-4.51z"
+                      />
+                      <path
+                        fill="#4285F4"
+                        d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.43h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.66 2.84c2.14-1.97 3.39-4.88 3.39-8.48z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.3 14.93c-.23-.69-.36-1.42-.36-2.18s.13-1.49.36-2.18L1.45 7.56C.52 9.42 0 11.48 0 12.75s.52 3.33 1.45 5.19l3.85-3.01z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.66-2.84c-1.01.68-2.31 1.09-3.8 1.09-3.28 0-5.8-1.81-6.7-4.51l-3.85 2.99C3.39 20.33 7.35 23 12 23z"
+                      />
+                    </svg>
+                    <span>
+                      {isArabic ? "تسجيل الدخول التجريبي بحساب جوجل" : "Sign in with Google (Sandbox)"}
+                    </span>
+                  </button>
+                )}
+              </div>
             </>
           )}
 

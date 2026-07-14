@@ -117,9 +117,24 @@ export default function App() {
   };
 
   // Translation workspace states
-  const [sourceLang, setSourceLang] = useState<LanguageCode>("auto");
-  const [targetLang, setTargetLang] = useState<LanguageCode>("en");
-  const [domain, setDomain] = useState<DomainCode>("general");
+  const [sourceLang, setSourceLang] = useState<LanguageCode>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("tarjuman_source_lang") as LanguageCode) || "auto";
+    }
+    return "auto";
+  });
+  const [targetLang, setTargetLang] = useState<LanguageCode>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("tarjuman_target_lang") as LanguageCode) || "en";
+    }
+    return "en";
+  });
+  const [domain, setDomain] = useState<DomainCode>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("tarjuman_domain") as DomainCode) || "general";
+    }
+    return "general";
+  });
   const [tone, setTone] = useState<ToneCode>("formal");
 
   const [sourceText, setSourceText] = useState("");
@@ -233,12 +248,24 @@ export default function App() {
     }
 
     // Default target language adaptation
-    if (isArabic) {
-      setTargetLang("en");
-    } else {
-      setTargetLang("ar");
+    const savedTargetLang = localStorage.getItem("tarjuman_target_lang");
+    if (!savedTargetLang) {
+      if (isArabic) {
+        setTargetLang("en");
+      } else {
+        setTargetLang("ar");
+      }
     }
   }, []);
+
+  // Save choices to LocalStorage on change
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("tarjuman_source_lang", sourceLang);
+      localStorage.setItem("tarjuman_target_lang", targetLang);
+      localStorage.setItem("tarjuman_domain", domain);
+    }
+  }, [sourceLang, targetLang, domain]);
 
   // Save history helper
   const saveHistoryToStorage = (newHistory: HistoryItem[]) => {
