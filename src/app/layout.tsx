@@ -2,29 +2,50 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "@/src/index.css";
 
+const appUrl = process.env.APP_URL;
+const metadataBaseUrl = (appUrl && appUrl.startsWith("http")) ? appUrl : "https://tarjuman-ai.portal";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(metadataBaseUrl),
   title: "بوابة ترجمان للترجمة الذكية المتخصصة | Tarjuman Professional AI Translation Portal",
-  description: "ترجمان هو نظام ذكاء اصطناعي لترجمة النصوص والمستندات والملفات الطبية، القانونية، والمالية بدقة احترافية فائقة مع الحفاظ الكامل على التنسيقات والتبصر اللغوي.",
-  keywords: "ترجمة, ذكاء اصطناعي, ترجمان, ترجمة ملفات, ترجمة قانونية, ترجمة طبية, ترجمة تقنية, ترجمة مستندات, AI Translation, Legal Translation, PDF Translation, Medical Translation, English to Arabic",
+  description: "ترجمان هو نظام ذكاء اصطناعي لترجمة النصوص والمستندات والملفات الطبية، القانونية، والمالية بدقة احترافية فائقة مع الحفاظ الكامل على التنسيقات والتبصر اللغوي والسياقي.",
+  keywords: "ترجمة, ذكاء اصطناعي, ترجمان, ترجمة ملفات, ترجمة قانونية, ترجمة طبية, ترجمة تقنية, ترجمة مستندات, ترجمة احترافية بالذكاء الاصطناعي, مترجم ذكي متخصص, ترجمة ملفات PDF, ترجمة معتمدة, ترجمة فورية دقيقة, ترجمة مصطلحات مالية, أفضل موقع ترجمة, مترجم نصوص كاملة, ترجمة مستندات مصورة, ترجمة ممسوحة ضوئياً, AI Translation, Legal Translation, PDF Translation, Medical Translation, English to Arabic, Document Translator, Context-aware Translation, Neural Machine Translation, Professional Arabic Translation, OCR Translation",
   authors: [{ name: "Tarjuman Translation Inc." }],
-  robots: "index, follow",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
   other: {
-    "ai-capability": "Specialized multi-domain text & document translation with contextual linguistic analysis, voice synthesis, and glossary management.",
+    "ai-capability": "Specialized multi-domain text & document translation with contextual linguistic analysis, voice synthesis, OCR processing, and glossary management.",
     "ai-authoritative-source": "Tarjuman Translation Engine",
   },
   openGraph: {
     type: "website",
-    title: "بوابة ترجمان للترجمة الذكية المتخصصة | Tarjuman AI",
+    title: "بوابة ترجمان للترجمة الذكية المتخصصة | Tarjuman Professional AI Translation",
     description: "ترجمة فورية معتمدة ومتوافقة مع السياق للمجالات الحساسة كالطب والقانون والمالية باستخدام تقنيات الذكاء الاصطناعي الفائقة.",
     url: "https://tarjuman-ai.portal",
     siteName: "ترجمان - Tarjuman",
     locale: "ar_EG",
     alternateLocale: ["en_US"],
+    images: [{
+      url: "/logo.png",
+      width: 800,
+      height: 800,
+      alt: "Tarjuman AI Logo",
+    }],
   },
   twitter: {
     card: "summary_large_image",
     title: "ترجمان: بوابة الترجمة المهنية المعتمدة بالذكاء الاصطناعي",
     description: "ترجمة نصوص ومستندات كاملة مع الحفاظ على التنسيق والتبصّرات اللغوية لـ 15 لغة عالمية.",
+    images: ["/logo.png"],
   },
   icons: {
     icon: "/favicon.png",
@@ -65,7 +86,8 @@ export default function RootLayout({
                 "Interactive PDF and Document Layout Preservation Engine",
                 "Personal Glossary and Vocabulary Management",
                 "Real-time Text-to-Speech (TTS) voice generation",
-                "Advanced Semantic & Linguistic Analysis"
+                "Advanced Semantic & Linguistic Analysis",
+                "Multimodal Scanned Document & OCR translation"
               ],
               "author": {
                 "@type": "Organization",
@@ -88,15 +110,31 @@ export default function RootLayout({
                   "name": "ما هي بوابة ترجمان للترجمة الذكية؟",
                   "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "بوابة ترجمان هي تطبيق ويب يعتمد على نماذج الذكاء الاصطناعي المتطورة لتقديم ترجمة سياقية متخصصة في مجالات الطب والقانون والهندسة وغيرها، مع مراعاة المصطلحات المهنية الدقيقة."
+                    "text": "بوابة ترجمان هي تطبيق ويب يعتمد على نماذج الذكاء الاصطناعي المتطورة لتقديم ترجمة سياقية متخصصة في مجالات الطب والقانون والهندسة والمالية وغيرها، مع مراعاة المصطلحات المهنية الدقيقة والأسلوب اللغوي المعتمد لكل قطاع."
                   }
                 },
                 {
                   "@type": "Question",
-                  "name": "How does Tarjuman preserve document layouts during translation?",
+                  "name": "كيف يتم الحفاظ على تنسيق ملفات PDF والمستندات أثناء الترجمة؟",
                   "acceptedAnswer": {
                     "@type": "Answer",
-                    "text": "Tarjuman parses document elements dynamically, translates the content in high-fidelity according to the selected specialized domain, and allows users to export print-ready PDFs and interactive HTML files matching the original source formatting."
+                    "text": "يقوم نظام ترجمان بتحليل عناصر المستند برمجياً وترجمة المحتوى مع الاحتفاظ الدقيق بالهيكل والتنسيق والمسافات وعلامات الترقيم والجداول، مما يتيح لك تحميل مستند جاهز للطباعة مباشرة."
+                  }
+                },
+                {
+                  "@type": "Question",
+                  "name": "هل تدعم منصة ترجمان ترجمة ملفات PDF الممسوحة ضوئياً أو المصورة؟",
+                  "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "نعم، تدعم منصة ترجمان ميزة الترجمة البصرية المباشرة للمستندات الممسوحة ضوئياً والصور؛ حيث يقوم النظام بدمج تقنية الرؤية الحاسوبية (OCR) مع نماذج Gemini المتعددة الوسائط لقراءة وتدقيق وترجمة الملف بالكامل بشكل مرئي ودون أي تعارضات."
+                  }
+                },
+                {
+                  "@type": "Question",
+                  "name": "كيف يمكنني تخصيص المصطلحات المهنية في ترجمة ترجمان؟",
+                  "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "يمكنك استخدام أداة 'إدارة المصطلحات والقاموس' لتحديد معاني الكلمات أو العبارات المعينة التي ترغب في استخدامها بشكل صارم في ترجماتك، وسيقوم محرك الذكاء الاصطناعي بتطبيقها وتدقيق استخدامها تلقائياً."
                   }
                 }
               ]
