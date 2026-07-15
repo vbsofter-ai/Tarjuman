@@ -39,7 +39,8 @@ import {
   Eye,
   EyeOff,
   CornerDownLeft,
-  ArrowRight
+  ArrowRight,
+  Star
 } from "lucide-react";
 
 interface AdminUser {
@@ -626,7 +627,7 @@ export default function AdminPage() {
               {activeTab === "overview" && (
                 <div className="space-y-6">
                   {/* Dashboard Metrics Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 flex items-center justify-between shadow-sm">
                       <div className="space-y-1 text-left">
                         <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">{isArabic ? "إجمالي المسجلين" : "Registered Users"}</p>
@@ -664,6 +665,20 @@ export default function AdminPage() {
                       </div>
                       <div className="p-3 bg-indigo-500/10 text-indigo-400 rounded-2xl">
                         <TrendingUp className="w-6 h-6" />
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 flex items-center justify-between shadow-sm">
+                      <div className="space-y-1 text-left">
+                        <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">{isArabic ? "متوسط تقييم الخدمة" : "Average User Rating"}</p>
+                        <h3 className="text-2xl font-black text-amber-400">
+                          {feedbacks.length 
+                            ? (feedbacks.reduce((acc, f) => acc + f.rating, 0) / feedbacks.length).toFixed(1)
+                            : "0.0"} ★
+                        </h3>
+                      </div>
+                      <div className="p-3 bg-amber-500/10 text-amber-400 rounded-2xl">
+                        <Star className="w-6 h-6" />
                       </div>
                     </div>
                   </div>
@@ -1070,6 +1085,66 @@ export default function AdminPage() {
                           onChange={(e) => setSystemConfig(prev => ({ ...prev, maintenanceMode: e.target.checked }))}
                           className="w-4 h-4 text-rose-600 bg-slate-900 border-slate-800 rounded cursor-pointer"
                         />
+                      </div>
+                    </div>
+
+                    {/* Financial Integrations Settings Card */}
+                    <div className="border-t border-slate-800 pt-6 space-y-4">
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2 pb-1">
+                        <CreditCard className="w-4 h-4 text-emerald-400" />
+                        <span>{isArabic ? "بوابات الدفع والربط المالي النشطة" : "Active Financial Payment Gateways"}</span>
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-semibold">
+                        {/* PayPal Config Card */}
+                        <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl space-y-3.5">
+                          <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                            <span className="text-white font-bold flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span>PayPal Gateway</span>
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-black uppercase tracking-wider">
+                              {isArabic ? "نشط" : "Active"}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold">{isArabic ? "معرف العميل (Client ID):" : "Client ID:"}</p>
+                            <p className="font-mono text-[9px] text-slate-300 truncate bg-slate-950 p-2 rounded-lg border border-slate-800/60 text-left" dir="ltr">BAAtW0FbdA45N9wcAkCk...Vzcw</p>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold">{isArabic ? "الوضعية التشغيلية:" : "Gateway Mode:"}</p>
+                            <p className="text-slate-300 text-[10px] bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800/60 flex items-center justify-between">
+                              <span>{isArabic ? "الوضع التجريبي (Sandbox)" : "Sandbox Mode"}</span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Paymob Config Card */}
+                        <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-2xl space-y-3.5">
+                          <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                            <span className="text-white font-bold flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span>Paymob Gateway</span>
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-black uppercase tracking-wider">
+                              {isArabic ? "نشط" : "Active"}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 font-mono text-left" dir="ltr">
+                            <div className="bg-slate-950 p-2 rounded-lg border border-slate-800/60 space-y-1">
+                              <span className="text-[8px] text-slate-500 uppercase tracking-wider font-extrabold block">Card Integration</span>
+                              <span>5738501</span>
+                            </div>
+                            <div className="bg-slate-950 p-2 rounded-lg border border-slate-800/60 space-y-1">
+                              <span className="text-[8px] text-slate-500 uppercase tracking-wider font-extrabold block">Tap-on-Phone</span>
+                              <span>5738500</span>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold">{isArabic ? "معرف الإطار (Iframe ID):" : "Iframe ID:"}</p>
+                            <p className="font-mono text-[10px] text-slate-300 bg-slate-950 p-2 rounded-lg border border-slate-800/60 text-left" dir="ltr">1002380</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
