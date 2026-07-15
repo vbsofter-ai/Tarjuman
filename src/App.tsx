@@ -1456,9 +1456,9 @@ export default function App() {
             </div>
 
             {/* Translation Workspace Core */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
               {/* Source Text Side */}
-              <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-col min-h-[350px]">
+              <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-col min-h-[260px]">
                 {/* Meta Bar */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
@@ -1518,7 +1518,7 @@ export default function App() {
                         ? "اكتب النص المراد ترجمته هنا، أو استخدم الميكروفون للإملاء الصوتي..."
                         : "Type your text here, or use the microphone to dictate..."
                     }
-                    className="w-full flex-1 min-h-[180px] bg-slate-50/50 p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 text-sm leading-relaxed resize-none placeholder-slate-400"
+                    className="w-full flex-1 min-h-[120px] bg-slate-50/50 p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 text-sm leading-relaxed resize-none placeholder-slate-400"
                   />
 
                   {/* Real-time word count & quota feedback panel */}
@@ -1585,7 +1585,7 @@ export default function App() {
               </div>
 
               {/* Target Text Side */}
-              <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-col min-h-[350px]">
+              <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-col min-h-[260px]">
                 {/* Meta Bar */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5">
@@ -1701,7 +1701,7 @@ export default function App() {
                     </div>
                   ) : null}
 
-                  <div className="flex-1 text-sm text-slate-800 leading-relaxed overflow-y-auto min-h-[180px] whitespace-pre-wrap">
+                  <div className="flex-1 text-sm text-slate-800 leading-relaxed overflow-y-auto min-h-[120px] whitespace-pre-wrap">
                     {translatedText ? (
                       <TypewriterTranslation text={translatedText} />
                     ) : (
