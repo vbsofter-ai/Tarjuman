@@ -179,6 +179,8 @@ export default function App() {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showUpgradeSuccess, setShowUpgradeSuccess] = useState(false);
   const [successPlanName, setSuccessPlanName] = useState("");
+  const [subscribingPlan, setSubscribingPlan] = useState<"free" | "pro" | "enterprise" | null>(null);
+  const [billingProvider, setBillingProvider] = useState<"paymob" | "paypal">("paymob");
 
 
   // Refs
@@ -327,46 +329,83 @@ export default function App() {
     setShowProfileDropdown(false);
   };
 
-  const handleSubscribe = async (planId: "free" | "pro" | "enterprise") => {
+  const handleSubscribe = async (
+    planId: "free" | "pro" | "enterprise",
+    billingPeriod: "monthly" | "yearly" = "monthly",
+    provider: "paymob" | "paypal" = "paymob"
+  ): Promise<void> => {
     if (!currentUser) {
       // User is not signed in. Open AuthModal first!
       setShowAuthModal(true);
       return;
     }
 
+    // If a billing period toggle is shown next to the modal, the caller
+    // passes it through; otherwise we default to monthly.
+
+    if (planId === "free") {
+      // Free plan: apply directly via the legacy subscribe endpoint
+      // (no payment required).
+      try {
+        const res = await fetch("/api/auth/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: currentUser.email, planId: "free" }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || "Failed to update subscription");
+        }
+        setCurrentUser(data);
+        localStorage.setItem("tarjuman_current_user", JSON.stringify(data));
+        setSuccessPlanName(isArabic ? "الباقة المجانية" : "Free Plan");
+        setShowUpgradeSuccess(true);
+        setShowPricingModal(false);
+      } catch (err: any) {
+        console.error("Subscription downgrade error:", err);
+        setError(isArabic ? "فشل تحديث الباقة. حاول مرة أخرى." : "Failed to update plan. Please try again.");
+      }
+      return;
+    }
+
+    // Paid plan: drive the new multi-provider flow.
     try {
-      const res = await fetch("/api/auth/subscribe", {
+      setSubscribingPlan(planId);
+      const res = await fetch("/api/billing/checkout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: currentUser.email,
-          planId: planId,
+          planId,
+          billingPeriod,
+          provider,
         }),
       });
-
       const data = await res.json();
       if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to update subscription");
+        throw new Error(data.error || "Failed to start checkout");
       }
-
-      // Update state and local storage with the user returned by the server
-      setCurrentUser(data);
-      localStorage.setItem("tarjuman_current_user", JSON.stringify(data));
-
-      // Display beautiful success alert/modal
-      const planNames = {
-        free: isArabic ? "الباقة المجانية" : "Free Plan",
-        pro: isArabic ? "الباقة الاحترافية Pro" : "Pro Professional Plan",
-        enterprise: isArabic ? "باقة الشركات والاعمال" : "Enterprise Master Plan",
-      };
-      setSuccessPlanName(planNames[planId]);
-      setShowUpgradeSuccess(true);
-      setShowPricingModal(false);
+      // Paymob → iframeUrl ; PayPal → approvalUrl
+      const target = data?.iframeUrl || data?.approvalUrl;
+      if (target) {
+        // Persist intent for the success page to know which user to refresh.
+        try {
+          sessionStorage.setItem("tarjuman_pending_payment", data.paymentId || "");
+          sessionStorage.setItem("tarjuman_pending_provider", provider);
+        } catch {}
+        // Redirect the user to the gateway's hosted checkout.
+        window.location.href = target;
+        return;
+      }
     } catch (err: any) {
-      console.error("Subscription upgrade error:", err);
-      setError(isArabic ? "فشل ترقية الباقة. الرجاء المحاولة مرة أخرى." : "Failed to upgrade plan. Please try again.");
+      console.error("Subscription checkout error:", err);
+      setError(
+        isArabic
+          ? (err?.message || "فشل بدء عملية الدفع. حاول مرة أخرى.")
+          : (err?.message || "Failed to start checkout. Please try again.")
+      );
+    } finally {
+      setSubscribingPlan(null);
     }
   };
 
@@ -2099,6 +2138,9 @@ export default function App() {
             currentUser={currentUser}
             onSubscribe={handleSubscribe}
             isArabic={isArabic}
+            loadingPlanId={subscribingPlan}
+            provider={billingProvider}
+            onProviderChange={setBillingProvider}
           />
         </div>
       </main>
@@ -2145,6 +2187,9 @@ export default function App() {
                   currentUser={currentUser}
                   onSubscribe={handleSubscribe}
                   isArabic={isArabic}
+                  loadingPlanId={subscribingPlan}
+                  provider={billingProvider}
+                  onProviderChange={setBillingProvider}
                 />
               </div>
             </motion.div>

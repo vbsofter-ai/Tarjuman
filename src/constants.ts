@@ -137,13 +137,65 @@ export const SAMPLE_TEXTS: Record<string, string> = {
   es: "La inteligencia artificial generativa se considera uno de los saltos tecnológicos más significativos de la era moderna."
 };
 
+// =====================================================================
+// PRICING PLANS — source of truth for both UI display and payment charges
+// amountMonthlyCents / amountYearlyCents are in the SMALLEST currency unit
+// (cents for USD, piasters/halalas for EGP). Paymob and PayPal both expect
+// integer cents. The "EGP" set is charged via Paymob, the "USD" set via PayPal.
+// =====================================================================
+export type BillingCurrency = "USD" | "EGP";
+export type PlanId = "free" | "pro" | "enterprise";
+export type BillingPeriod = "monthly" | "yearly";
+export type PaymentProvider = "paymob" | "paypal";
+
+export const DEFAULT_PROVIDER: PaymentProvider = "paymob";
+export const EGP_PROVIDER: PaymentProvider = "paymob";
+export const USD_PROVIDER: PaymentProvider = "paypal";
+
+export const BILLING_CURRENCY_SYMBOL_AR: Record<BillingCurrency, string> = {
+  USD: "دولار",
+  EGP: "ج.م",
+};
+export const BILLING_CURRENCY_SYMBOL_EN: Record<BillingCurrency, string> = {
+  USD: "$",
+  EGP: "EGP",
+};
+
+export function formatPrice(amountCents: number, lang: "ar" | "en", period: BillingPeriod, currency: BillingCurrency = "EGP"): string {
+  if (amountCents === 0) return lang === "ar" ? "مجاناً" : "Free";
+  const value = (amountCents / 100).toLocaleString(lang === "ar" ? "ar-EG" : "en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+  const unit = lang === "ar"
+    ? (period === "monthly" ? "/شهرياً" : "/سنوياً")
+    : (period === "monthly" ? "/mo" : "/yr");
+  // USD: English shows "$19" (symbol prefix), Arabic shows "19 دولار" (suffix).
+  // EGP: English shows "999 EGP" (suffix), Arabic shows "999 ج.م" (suffix).
+  if (currency === "USD" && lang === "en") {
+    return `$${value} ${unit}`;
+  }
+  if (currency === "USD" && lang === "ar") {
+    return `${value} دولار ${unit}`;
+  }
+  if (currency === "EGP" && lang === "en") {
+    return `${value} EGP ${unit}`;
+  }
+  return `${value} ج.م ${unit}`;
+}
+
 export const PRICING_PLANS: any[] = [
   {
     id: "free",
     nameAr: "الباقة المجانية",
     nameEn: "Free Plan",
-    priceMonthly: "0$",
-    priceYearly: "0$",
+    priceMonthly: "0",
+    priceYearly: "0",
+    amountMonthlyCents: 0,
+    amountYearlyCents: 0,
+    amountMonthlyCentsUSD: 0,
+    amountYearlyCentsUSD: 0,
+    currency: "EGP",
     limitDescAr: "5,000 كلمة شهرياً",
     limitDescEn: "5,000 words per month",
     featuresAr: [
@@ -168,8 +220,15 @@ export const PRICING_PLANS: any[] = [
     id: "pro",
     nameAr: "الباقة الاحترافية Pro",
     nameEn: "Pro Professional",
-    priceMonthly: "$19",
-    priceYearly: "$149",
+    priceMonthly: "999",
+    priceYearly: "7999",
+    // EGP amounts (Paymob): 999 EGP ≈ $19 / 7999 EGP ≈ $149 (yearly discount).
+    amountMonthlyCents: 99900,
+    amountYearlyCents: 799900,
+    // USD amounts (PayPal): $19 / $149.
+    amountMonthlyCentsUSD: 1900,
+    amountYearlyCentsUSD: 14900,
+    currency: "EGP",
     limitDescAr: "100,000 كلمة شهرياً",
     limitDescEn: "100,000 words per month",
     featuresAr: [
@@ -200,8 +259,15 @@ export const PRICING_PLANS: any[] = [
     id: "enterprise",
     nameAr: "باقة الشركات والاعمال",
     nameEn: "Enterprise Master",
-    priceMonthly: "$49",
-    priceYearly: "$399",
+    priceMonthly: "2499",
+    priceYearly: "19999",
+    // EGP amounts (Paymob): 2499 EGP ≈ $49 / 19999 EGP ≈ $399.
+    amountMonthlyCents: 249900,
+    amountYearlyCents: 1999900,
+    // USD amounts (PayPal): $49 / $399.
+    amountMonthlyCentsUSD: 4900,
+    amountYearlyCentsUSD: 39900,
+    currency: "EGP",
     limitDescAr: "كلمات غير محدودة شهرياً",
     limitDescEn: "Unlimited words per month",
     featuresAr: [

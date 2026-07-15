@@ -200,6 +200,58 @@ export async function initializeDatabase() {
     `);
     console.log("[DB] Created/Verified 'tarjuman_feedback' table.");
 
+    // Create payments table (Paymob + PayPal subscription payments)
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS tarjuman_payments (
+        id VARCHAR(80) PRIMARY KEY,
+        user_email VARCHAR(100) NOT NULL,
+        plan_id VARCHAR(50) NOT NULL,
+        billing_period VARCHAR(20) NOT NULL,
+        amount_cents INT NOT NULL,
+        currency VARCHAR(10) NOT NULL DEFAULT 'EGP',
+        provider VARCHAR(30) NOT NULL DEFAULT 'paymob',
+        status VARCHAR(30) NOT NULL DEFAULT 'pending',
+        paymob_order_id BIGINT,
+        paymob_transaction_id BIGINT,
+        paymob_payment_token TEXT,
+        paymob_hmac_verified TINYINT(1) DEFAULT 0,
+        paypal_order_id VARCHAR(80),
+        paypal_capture_id VARCHAR(80),
+        paypal_payer_id VARCHAR(80),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        paid_at DATETIME,
+        INDEX idx_user_email (user_email),
+        INDEX idx_status (status),
+        INDEX idx_paymob_order (paymob_order_id),
+        INDEX idx_paypal_order (paypal_order_id),
+        INDEX idx_provider (provider)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log("[DB] Created/Verified 'tarjuman_payments' table.");
+
+    // Add columns idempotently to tarjuman_payments for older deployments
+    const paymentColumns = [
+      "paymob_order_id BIGINT",
+      "paymob_transaction_id BIGINT",
+      "paymob_payment_token TEXT",
+      "paymob_hmac_verified TINYINT(1) DEFAULT 0",
+      "paypal_order_id VARCHAR(80)",
+      "paypal_capture_id VARCHAR(80)",
+      "paypal_payer_id VARCHAR(80)",
+      "paid_at DATETIME",
+      "provider VARCHAR(30) NOT NULL DEFAULT 'paymob'",
+    ];
+    for (const col of paymentColumns) {
+      try {
+        const colName = col.split(" ")[0];
+        await conn.query(`ALTER TABLE tarjuman_payments ADD COLUMN ${col}`);
+        console.log(`[DB] Added '${colName}' column to tarjuman_payments.`);
+      } catch (err) {
+        // Column already exists, ignore.
+      }
+    }
+
     // Promote romyatef@gmail.com to super_admin in database and set all permissions
     const superAdminPerms = JSON.stringify(["super_admin", "dashboard", "users_view", "users_manage", "config_manage", "logs_view", "translate", "upload_files", "linguistic_analysis", "analytics_view"]);
     await conn.query(
@@ -674,6 +726,9 @@ let fallbackVisits: any[] = [
   { timestamp: new Date(), ip_address: "192.168.1.6", user_agent: "Mozilla/5.0 (Windows NT 10.0)", referrer: "", path: "/" }
 ];
 
+// In-memory fallback for tarjuman_payments (used when MySQL is unreachable)
+let fallbackPayments: any[] = [];
+
 export async function isSuperAdmin(email: string): Promise<boolean> {
   const user = await getUserByEmail(email);
   return user?.role === "super_admin";
@@ -876,4 +931,368 @@ export async function getFeedback() {
   } finally {
     if (conn) conn.release();
   }
+}
+
+// =====================================================================
+// PAYMENT HELPERS — used by /api/billing/* routes (Paymob integration)
+// =====================================================================
+
+export interface PaymentRecord {
+  id: string;                       // our internal payment id
+  user_email: string;
+  plan_id: "free" | "pro" | "enterprise";
+  billing_period: "monthly" | "yearly";
+  amount_cents: number;
+  currency: string;
+  provider: "paymob" | "paypal";
+  status: "pending" | "paid" | "failed" | "cancelled" | "refunded";
+  // Paymob fields
+  paymob_order_id?: number;
+  paymob_transaction_id?: number;
+  paymob_payment_token?: string;
+  paymob_hmac_verified?: 0 | 1;
+  // PayPal fields
+  paypal_order_id?: string;
+  paypal_capture_id?: string;
+  paypal_payer_id?: string;
+  // Timestamps
+  created_at?: string;
+  updated_at?: string;
+  paid_at?: string | null;
+}
+
+export async function createPayment(record: Omit<PaymentRecord, "created_at" | "updated_at" | "status" | "provider"> & { provider?: PaymentRecord["provider"]; status?: PaymentRecord["status"] }): Promise<PaymentRecord> {
+  await ensureInitialized();
+  const newRecord: PaymentRecord = {
+    ...record,
+    provider: record.provider || "paymob",
+    status: record.status || "pending",
+    paymob_hmac_verified: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    paid_at: null,
+  };
+
+  if (isFallbackMode) {
+    fallbackPayments.push(newRecord);
+    return newRecord;
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO tarjuman_payments
+       (id, user_email, plan_id, billing_period, amount_cents, currency, provider, status,
+        paymob_order_id, paymob_transaction_id, paymob_payment_token, paymob_hmac_verified,
+        paypal_order_id, paypal_capture_id, paypal_payer_id, paid_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        newRecord.id,
+        newRecord.user_email,
+        newRecord.plan_id,
+        newRecord.billing_period,
+        newRecord.amount_cents,
+        newRecord.currency,
+        newRecord.provider,
+        newRecord.status,
+        newRecord.paymob_order_id ?? null,
+        newRecord.paymob_transaction_id ?? null,
+        newRecord.paymob_payment_token ?? null,
+        newRecord.paymob_hmac_verified ?? 0,
+        newRecord.paypal_order_id ?? null,
+        newRecord.paypal_capture_id ?? null,
+        newRecord.paypal_payer_id ?? null,
+        newRecord.paid_at ?? null,
+      ]
+    );
+    return newRecord;
+  } catch (error) {
+    console.error("[DB] createPayment failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    fallbackPayments.push(newRecord);
+    return newRecord;
+  }
+}
+
+export async function getPaymentById(id: string): Promise<PaymentRecord | null> {
+  await ensureInitialized();
+  if (isFallbackMode) {
+    return fallbackPayments.find(p => p.id === id) || null;
+  }
+  try {
+    const [rows]: any = await pool.query("SELECT * FROM tarjuman_payments WHERE id = ?", [id]);
+    if (!rows[0]) return null;
+    return rowsToPayment(rows[0]);
+  } catch (error) {
+    console.error("[DB] getPaymentById failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    return fallbackPayments.find(p => p.id === id) || null;
+  }
+}
+
+export async function getPaymentByPaymobOrderId(paymobOrderId: number): Promise<PaymentRecord | null> {
+  await ensureInitialized();
+  if (isFallbackMode) {
+    return fallbackPayments.find(p => p.paymob_order_id === paymobOrderId) || null;
+  }
+  try {
+    const [rows]: any = await pool.query(
+      "SELECT * FROM tarjuman_payments WHERE paymob_order_id = ? ORDER BY created_at DESC LIMIT 1",
+      [paymobOrderId]
+    );
+    if (!rows[0]) return null;
+    return rowsToPayment(rows[0]);
+  } catch (error) {
+    console.error("[DB] getPaymentByPaymobOrderId failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    return fallbackPayments.find(p => p.paymob_order_id === paymobOrderId) || null;
+  }
+}
+
+export async function getLatestPaymentForUser(email: string): Promise<PaymentRecord | null> {
+  await ensureInitialized();
+  if (isFallbackMode) {
+    const userPayments = fallbackPayments
+      .filter(p => p.user_email.toLowerCase() === email.toLowerCase())
+      .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime());
+    return userPayments[0] || null;
+  }
+  try {
+    const [rows]: any = await pool.query(
+      "SELECT * FROM tarjuman_payments WHERE user_email = ? ORDER BY created_at DESC LIMIT 1",
+      [email]
+    );
+    if (!rows[0]) return null;
+    return rowsToPayment(rows[0]);
+  } catch (error) {
+    console.error("[DB] getLatestPaymentForUser failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    const userPayments = fallbackPayments
+      .filter(p => p.user_email.toLowerCase() === email.toLowerCase())
+      .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime());
+    return userPayments[0] || null;
+  }
+}
+
+/**
+ * Persist Paymob's order id and (optionally) the single-use payment token
+ * on an existing `tarjuman_payments` row.
+ */
+export async function storePaymobIdentifiers(
+  id: string,
+  identifiers: { paymob_order_id?: number; paymob_payment_token?: string }
+): Promise<PaymentRecord | null> {
+  await ensureInitialized();
+  const sets: string[] = [];
+  const params: any[] = [];
+  if (identifiers.paymob_order_id !== undefined) {
+    sets.push("paymob_order_id = ?");
+    params.push(identifiers.paymob_order_id);
+  }
+  if (identifiers.paymob_payment_token !== undefined) {
+    sets.push("paymob_payment_token = ?");
+    params.push(identifiers.paymob_payment_token);
+  }
+  if (sets.length === 0) return getPaymentById(id);
+  sets.push("updated_at = CURRENT_TIMESTAMP");
+
+  if (isFallbackMode) {
+    let updated: PaymentRecord | null = null;
+    fallbackPayments = fallbackPayments.map(p => {
+      if (p.id === id) {
+        updated = { ...p, ...identifiers, updated_at: new Date().toISOString() };
+        return updated;
+      }
+      return p;
+    });
+    return updated;
+  }
+  try {
+    await pool.query(
+      `UPDATE tarjuman_payments SET ${sets.join(", ")} WHERE id = ?`,
+      [...params, id]
+    );
+    return getPaymentById(id);
+  } catch (error) {
+    console.error("[DB] storePaymobIdentifiers failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    let updated: PaymentRecord | null = null;
+    fallbackPayments = fallbackPayments.map(p => {
+      if (p.id === id) {
+        updated = { ...p, ...identifiers, updated_at: new Date().toISOString() };
+        return updated;
+      }
+      return p;
+    });
+    return updated;
+  }
+}
+
+/**
+ * Persist PayPal order id and (optionally) payer id on an existing
+ * `tarjuman_payments` row.
+ */
+export async function storePaypalIdentifiers(
+  id: string,
+  identifiers: { paypal_order_id?: string; paypal_payer_id?: string; paypal_capture_id?: string }
+): Promise<PaymentRecord | null> {
+  await ensureInitialized();
+  const sets: string[] = [];
+  const params: any[] = [];
+  if (identifiers.paypal_order_id !== undefined) {
+    sets.push("paypal_order_id = ?");
+    params.push(identifiers.paypal_order_id);
+  }
+  if (identifiers.paypal_payer_id !== undefined) {
+    sets.push("paypal_payer_id = ?");
+    params.push(identifiers.paypal_payer_id);
+  }
+  if (identifiers.paypal_capture_id !== undefined) {
+    sets.push("paypal_capture_id = ?");
+    params.push(identifiers.paypal_capture_id);
+  }
+  if (sets.length === 0) return getPaymentById(id);
+  sets.push("updated_at = CURRENT_TIMESTAMP");
+
+  if (isFallbackMode) {
+    let updated: PaymentRecord | null = null;
+    fallbackPayments = fallbackPayments.map(p => {
+      if (p.id === id) {
+        updated = { ...p, ...identifiers, updated_at: new Date().toISOString() };
+        return updated;
+      }
+      return p;
+    });
+    return updated;
+  }
+  try {
+    await pool.query(
+      `UPDATE tarjuman_payments SET ${sets.join(", ")} WHERE id = ?`,
+      [...params, id]
+    );
+    return getPaymentById(id);
+  } catch (error) {
+    console.error("[DB] storePaypalIdentifiers failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    let updated: PaymentRecord | null = null;
+    fallbackPayments = fallbackPayments.map(p => {
+      if (p.id === id) {
+        updated = { ...p, ...identifiers, updated_at: new Date().toISOString() };
+        return updated;
+      }
+      return p;
+    });
+    return updated;
+  }
+}
+
+/**
+ * Look up a payment by its PayPal order id (used by the capture endpoint
+ * after PayPal redirects the user back).
+ */
+export async function getPaymentByPaypalOrderId(paypalOrderId: string): Promise<PaymentRecord | null> {
+  await ensureInitialized();
+  if (isFallbackMode) {
+    return fallbackPayments.find(p => p.paypal_order_id === paypalOrderId) || null;
+  }
+  try {
+    const [rows]: any = await pool.query(
+      "SELECT * FROM tarjuman_payments WHERE paypal_order_id = ? ORDER BY created_at DESC LIMIT 1",
+      [paypalOrderId]
+    );
+    if (!rows[0]) return null;
+    return rowsToPayment(rows[0]);
+  } catch (error) {
+    console.error("[DB] getPaymentByPaypalOrderId failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    return fallbackPayments.find(p => p.paypal_order_id === paypalOrderId) || null;
+  }
+}
+
+export async function updatePaymentStatus(
+  id: string,
+  update: {
+    status?: PaymentRecord["status"];
+    paymob_transaction_id?: number;
+    paymob_hmac_verified?: 0 | 1;
+    paid_at?: string | null;
+  }
+): Promise<PaymentRecord | null> {
+  await ensureInitialized();
+  const sets: string[] = [];
+  const params: any[] = [];
+  if (update.status !== undefined) { sets.push("status = ?"); params.push(update.status); }
+  if (update.paymob_transaction_id !== undefined) { sets.push("paymob_transaction_id = ?"); params.push(update.paymob_transaction_id); }
+  if (update.paymob_hmac_verified !== undefined) { sets.push("paymob_hmac_verified = ?"); params.push(update.paymob_hmac_verified); }
+  if (update.paid_at !== undefined) { sets.push("paid_at = ?"); params.push(update.paid_at); }
+  sets.push("updated_at = CURRENT_TIMESTAMP");
+
+  if (isFallbackMode) {
+    let updated: PaymentRecord | null = null;
+    fallbackPayments = fallbackPayments.map(p => {
+      if (p.id === id) {
+        updated = { ...p, ...update, updated_at: new Date().toISOString() };
+        return updated;
+      }
+      return p;
+    });
+    return updated;
+  }
+
+  try {
+    await pool.query(
+      `UPDATE tarjuman_payments SET ${sets.join(", ")} WHERE id = ?`,
+      [...params, id]
+    );
+    return await getPaymentById(id);
+  } catch (error) {
+    console.error("[DB] updatePaymentStatus failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    let updated: PaymentRecord | null = null;
+    fallbackPayments = fallbackPayments.map(p => {
+      if (p.id === id) {
+        updated = { ...p, ...update, updated_at: new Date().toISOString() };
+        return updated;
+      }
+      return p;
+    });
+    return updated;
+  }
+}
+
+export async function getAllPayments(): Promise<PaymentRecord[]> {
+  await ensureInitialized();
+  if (isFallbackMode) {
+    return fallbackPayments.slice().sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime());
+  }
+  try {
+    const [rows]: any = await pool.query("SELECT * FROM tarjuman_payments ORDER BY created_at DESC LIMIT 200");
+    return (rows as any[]).map(rowsToPayment);
+  } catch (error) {
+    console.error("[DB] getAllPayments failed, using in-memory fallback:", error);
+    isFallbackMode = true;
+    return fallbackPayments.slice().sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime());
+  }
+}
+
+function rowsToPayment(row: any): PaymentRecord {
+  return {
+    id: row.id,
+    user_email: row.user_email,
+    plan_id: row.plan_id,
+    billing_period: row.billing_period,
+    amount_cents: row.amount_cents,
+    currency: row.currency,
+    provider: row.provider || "paymob",
+    status: row.status,
+    paymob_order_id: row.paymob_order_id ?? undefined,
+    paymob_transaction_id: row.paymob_transaction_id ?? undefined,
+    paymob_payment_token: row.paymob_payment_token ?? undefined,
+    paymob_hmac_verified: row.paymob_hmac_verified ?? 0,
+    paypal_order_id: row.paypal_order_id ?? undefined,
+    paypal_capture_id: row.paypal_capture_id ?? undefined,
+    paypal_payer_id: row.paypal_payer_id ?? undefined,
+    created_at: row.created_at ? new Date(row.created_at).toISOString() : undefined,
+    updated_at: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+    paid_at: row.paid_at ? new Date(row.paid_at).toISOString() : null,
+  };
 }

@@ -1,20 +1,28 @@
 import React, { useState } from "react";
-import { Check, Star, Shield, Zap, Sparkles } from "lucide-react";
-import { PRICING_PLANS } from "../constants";
+import { Check, Star, Shield, Zap, Sparkles, Loader2 } from "lucide-react";
+import { PRICING_PLANS, formatPrice, PlanId, BillingPeriod, PaymentProvider } from "../constants";
 import { User } from "../types";
 
 interface PricingTableProps {
   currentUser: User | null;
-  onSubscribe: (planId: "free" | "pro" | "enterprise") => void;
+  onSubscribe: (planId: PlanId, billingPeriod: BillingPeriod, provider: PaymentProvider) => Promise<void> | void;
   isArabic: boolean;
+  loadingPlanId?: PlanId | null;
+  provider: PaymentProvider;
+  onProviderChange?: (p: PaymentProvider) => void;
 }
 
 export const PricingTable: React.FC<PricingTableProps> = ({
   currentUser,
   onSubscribe,
   isArabic,
+  loadingPlanId = null,
+  provider,
+  onProviderChange,
 }) => {
-  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
+
+  const currency: "EGP" | "USD" = provider === "paypal" ? "USD" : "EGP";
 
   return (
     <div className="w-full bg-white rounded-3xl border border-slate-100 p-6 sm:p-8 shadow-sm space-y-8">
@@ -29,8 +37,36 @@ export const PricingTable: React.FC<PricingTableProps> = ({
             : "Supercharge your business, medical, or legal translations by choosing a plan suited to your scale."}
         </p>
 
+        {/* Payment Provider Toggle */}
+        {onProviderChange && (
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <button
+              onClick={() => onProviderChange("paymob")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+                provider === "paymob"
+                  ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${provider === "paymob" ? "bg-emerald-400" : "bg-slate-300"}`} />
+              <span>{isArabic ? "Paymob • جنيه مصري" : "Paymob • EGP"}</span>
+            </button>
+            <button
+              onClick={() => onProviderChange("paypal")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+                provider === "paypal"
+                  ? "bg-[#003087] text-white border-[#003087] shadow-sm"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${provider === "paypal" ? "bg-[#009cde]" : "bg-slate-300"}`} />
+              <span>{isArabic ? "PayPal • دولار أمريكي" : "PayPal • USD"}</span>
+            </button>
+          </div>
+        )}
+
         {/* Billing Toggle Switch */}
-        <div className="flex items-center justify-center gap-3 pt-3">
+        <div className="flex items-center justify-center gap-3 pt-2">
           <span className={`text-xs font-bold ${billingPeriod === "monthly" ? "text-slate-800" : "text-slate-400"}`}>
             {isArabic ? "دفع شهري" : "Monthly"}
           </span>
@@ -57,8 +93,21 @@ export const PricingTable: React.FC<PricingTableProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
         {PRICING_PLANS.map((plan) => {
           const isCurrent = currentUser?.plan === plan.id;
-          const price = billingPeriod === "monthly" ? plan.priceMonthly : plan.priceYearly;
+          const isLoading = loadingPlanId === plan.id;
+          const disabled = isCurrent || (loadingPlanId !== null && loadingPlanId !== plan.id);
+
+          // Pick the right amount fields based on the chosen provider.
+          const amountCents =
+            provider === "paypal"
+              ? (billingPeriod === "monthly" ? plan.amountMonthlyCentsUSD : plan.amountYearlyCentsUSD)
+              : (billingPeriod === "monthly" ? plan.amountMonthlyCents : plan.amountYearlyCents);
+          const displayPrice = formatPrice(amountCents, isArabic ? "ar" : "en", billingPeriod, currency);
           const features = isArabic ? plan.featuresAr : plan.featuresEn;
+
+          // Choose CTA label per provider.
+          const ctaLabel = isArabic
+            ? (provider === "paypal" ? "ادفع بـ PayPal" : "ادفع بـ Paymob")
+            : (provider === "paypal" ? "Pay with PayPal" : "Pay with Paymob");
 
           return (
             <div
@@ -89,10 +138,7 @@ export const PricingTable: React.FC<PricingTableProps> = ({
 
                 {/* Price Label */}
                 <div className="my-5 flex items-baseline gap-1">
-                  <span className="text-3xl sm:text-4xl font-extrabold text-slate-900">{price}</span>
-                  <span className="text-xs text-slate-400 font-semibold">
-                    / {billingPeriod === "monthly" ? (isArabic ? "شهرياً" : "month") : (isArabic ? "سنوياً" : "year")}
-                  </span>
+                  <span className="text-3xl sm:text-4xl font-extrabold text-slate-900">{displayPrice}</span>
                 </div>
 
                 {/* Features Checklist */}
@@ -111,30 +157,38 @@ export const PricingTable: React.FC<PricingTableProps> = ({
               {/* Subscribe CTA Button */}
               <div className="mt-6 pt-5 border-t border-slate-100">
                 <button
-                  onClick={() => onSubscribe(plan.id)}
-                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 ${
+                  onClick={() => onSubscribe(plan.id as PlanId, billingPeriod, provider)}
+                  disabled={disabled}
+                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
                     isCurrent
                       ? "bg-slate-100 text-slate-500 border border-slate-200 cursor-default"
                       : plan.popular
                       ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-600/10"
                       : "bg-slate-900 hover:bg-slate-800 text-white shadow-sm"
                   }`}
-                  disabled={isCurrent}
                 >
-                  {plan.id === "pro" ? (
-                    <Zap className="w-3.5 h-3.5 fill-current" />
-                  ) : plan.id === "enterprise" ? (
-                    <Shield className="w-3.5 h-3.5" />
-                  ) : null}
-                  <span>
-                    {isCurrent
-                      ? isArabic
-                        ? "باقاتك النشطة الحالية"
-                        : "Active Plan"
-                      : isArabic
-                      ? plan.ctaAr
-                      : plan.ctaEn}
-                  </span>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>{isArabic ? "جارٍ التحويل…" : "Redirecting…"}</span>
+                    </>
+                  ) : isCurrent ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{isArabic ? "باقاتك النشطة الحالية" : "Active Plan"}</span>
+                    </>
+                  ) : (
+                    <>
+                      {plan.id === "pro" ? (
+                        <Zap className="w-3.5 h-3.5 fill-current" />
+                      ) : plan.id === "enterprise" ? (
+                        <Shield className="w-3.5 h-3.5" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5" />
+                      )}
+                      <span>{ctaLabel}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
