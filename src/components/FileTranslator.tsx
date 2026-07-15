@@ -52,11 +52,19 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
             throw new Error(isArabic ? "فشل قراءة ملف PDF" : "Failed to read PDF file.");
           }
 
-          // Dynamic import of pdfjs-dist
-          const pdfjsLib = await import("pdfjs-dist");
-          // Configure worker URL using exact version to ensure matching compatibility
-          // @ts-ignore
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "6.1.200"}/build/pdf.worker.min.mjs`;
+          // Inject pdfjs-dist script dynamically if it doesn't exist
+          if (!(window as any).pdfjsLib) {
+            await new Promise<void>((resolve, reject) => {
+              const script = document.createElement("script");
+              script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+              script.onload = () => resolve();
+              script.onerror = () => reject(new Error("Failed to load PDF parsing library."));
+              document.head.appendChild(script);
+            });
+          }
+
+          const pdfjsLib = (window as any).pdfjsLib;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
           const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
           const pdf = await loadingTask.promise;
@@ -100,6 +108,64 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
       
       reader.onerror = () => {
         setError(isArabic ? "فشل قراءة الملف" : "Failed to read file.");
+        setIsExtracting(false);
+      };
+
+      reader.readAsArrayBuffer(file);
+    } else if (file.name.endsWith(".docx") || file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      setIsExtracting(true);
+      reader.onload = async (e) => {
+        try {
+          const arrayBuffer = e.target?.result as ArrayBuffer;
+          if (!arrayBuffer) {
+            throw new Error(isArabic ? "فشل قراءة ملف Word" : "Failed to read Word file.");
+          }
+
+          // Inject mammoth from CDNJS dynamically if it doesn't exist
+          if (!(window as any).mammoth) {
+            await new Promise<void>((resolve, reject) => {
+              const script = document.createElement("script");
+              script.src = "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js";
+              script.onload = () => resolve();
+              script.onerror = () => reject(new Error("Failed to load Word docx library."));
+              document.head.appendChild(script);
+            });
+          }
+
+          const mammoth = (window as any).mammoth;
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          const extractedText = result.value.trim();
+          
+          if (!extractedText) {
+            throw new Error(isArabic ? "ملف الـ Word فارغ أو لم يتم استخراج نصوص مقروءة منه." : "Word document is empty or no readable text was extracted.");
+          }
+
+          // Also get base64 for download / metadata representation
+          const base64Reader = new FileReader();
+          base64Reader.onload = (bEvent) => {
+            const bResult = bEvent.target?.result as string;
+            const base64Data = bResult.split(",")[1];
+            
+            onFileLoaded({
+              name: file.name,
+              size: file.size,
+              mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              data: base64Data,
+              extractedText: extractedText,
+            });
+            setIsExtracting(false);
+          };
+          base64Reader.readAsDataURL(file);
+
+        } catch (err: any) {
+          console.error("DOCX extraction error", err);
+          setError(err.message || (isArabic ? "فشل استخراج النص من ملف Word" : "Failed to extract text from Word file."));
+          setIsExtracting(false);
+        }
+      };
+
+      reader.onerror = () => {
+        setError(isArabic ? "فشل قراءة ملف Word" : "Failed to read Word file.");
         setIsExtracting(false);
       };
 
@@ -172,7 +238,7 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept=".txt,.pdf,.png,.jpg,.jpeg"
+        accept=".txt,.pdf,.docx,.png,.jpg,.jpeg"
         className="hidden"
       />
 
@@ -180,7 +246,7 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
         <div className="border-2 border-dashed rounded-2xl p-8 text-center border-indigo-500 bg-indigo-50/30 animate-pulse">
           <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
           <p className="text-sm font-bold text-slate-700">
-            {isArabic ? "جاري قراءة واستخراج النصوص من ملف PDF..." : "Extracting text content from PDF..."}
+            {isArabic ? "جاري قراءة واستخراج النصوص من الملف..." : "Extracting text content from document..."}
           </p>
           <p className="text-xs text-slate-500 mt-1">
             {isArabic ? "يرجى الانتظار، قد يستغرق هذا بضع ثوانٍ..." : "Please wait, this might take a few seconds..."}
@@ -208,8 +274,8 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
           </h4>
           <p className="text-xs text-slate-500 max-w-xs mx-auto mb-2">
             {isArabic
-              ? "اسحب وأفلت الملف هنا أو انقر للتصفح. ندعم المستندات والصور (PDF, TXT, PNG, JPG)"
-              : "Drag and drop your file here, or click to browse. Supports PDF, TXT, PNG, JPG"}
+              ? "اسحب وأفلت الملف هنا أو انقر للتصفح. ندعم المستندات والصور (PDF, DOCX, TXT, PNG, JPG)"
+              : "Drag and drop your file here, or click to browse. Supports PDF, DOCX, TXT, PNG, JPG"}
           </p>
           <span className="inline-block text-[10px] font-medium px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">
             {isArabic ? "الحد الأقصى: 10 ميجابايت" : "Max size: 10MB"}

@@ -785,6 +785,59 @@ export default function App() {
     printWindow.document.close();
   };
 
+  // Export translation directly to a formatted Word document (Microsoft Word compatible)
+  const handleExportWord = () => {
+    if (!translatedText || !fileAttached) return;
+    
+    const originalName = fileAttached.name;
+    const dotIndex = originalName.lastIndexOf(".");
+    const baseName = dotIndex !== -1 ? originalName.substring(0, dotIndex) : originalName;
+    const translatedFileName = `${baseName}_translated_${targetLang}.doc`;
+
+    const htmlContent = `
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+  <meta charset="utf-8">
+  <title>${translatedFileName}</title>
+  <!--[if gte mso 9]>
+  <xml>
+    <w:WordDocument>
+      <w:View>Print</w:View>
+      <w:Zoom>90</w:Zoom>
+      <w:DoNotOptimizeForBrowser/>
+    </w:WordDocument>
+  </xml>
+  <![endif]-->
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      line-height: 1.6;
+      margin: 40px;
+      direction: ${targetLang === "ar" || targetLang === "ur" ? "rtl" : "ltr"};
+      text-align: ${targetLang === "ar" || targetLang === "ur" ? "right" : "left"};
+    }
+    p {
+      margin-bottom: 12px;
+      font-size: 14px;
+      color: #334155;
+    }
+  </style>
+</head>
+<body>
+  ${translatedText.split("\n").map(p => p.trim() ? `<p>${p}</p>` : "<p>&nbsp;</p>").join("")}
+</body>
+</html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: "application/msword;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = translatedFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Save glossary helper
   const saveGlossaryToStorage = (newGlossary: GlossaryTerm[]) => {
     setGlossary(newGlossary);
@@ -1740,6 +1793,19 @@ export default function App() {
                         <Download className="w-3.5 h-3.5" />
                         <span>{isArabic ? "ملف HTML" : "HTML File"}</span>
                       </button>
+                      
+                      {fileAttached.name.toLowerCase().endsWith(".docx") && (
+                        <button
+                          type="button"
+                          onClick={handleExportWord}
+                          className="flex-shrink-0 flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-bold py-1.5 px-2.5 rounded-lg transition-all cursor-pointer"
+                          title={isArabic ? "تحميل كمستند Word منسق" : "Download as Formatted Word Document"}
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>{isArabic ? "ملف Word" : "Word File"}</span>
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         onClick={handleExportPDF}
