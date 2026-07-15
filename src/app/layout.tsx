@@ -8,6 +8,8 @@ const metadataBaseUrl = (appUrl && appUrl.startsWith("http")) ? appUrl : "https:
 import { getSystemConfig } from "@/src/lib/server-db";
 import { startSeoScheduler } from "@/src/lib/seo-updater";
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata(): Promise<Metadata> {
   let title = "بوابة ترجمان للترجمة الذكية المتخصصة | Tarjuman Professional AI Translation Portal";
   let description = "ترجمان هو نظام ذكاء اصطناعي لترجمة النصوص والمستندات والملفات الطبية، القانونية، والمالية بدقة احترافية فائقة مع الحفاظ الكامل على التنسيقات والتبصر اللغوي والسياقي.";

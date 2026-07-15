@@ -13,6 +13,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  connectTimeout: 5000 // 5 seconds connection timeout to prevent hanging on hosting servers
 });
 
 // Resilient Fallback Mode State
