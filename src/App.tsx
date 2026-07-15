@@ -56,6 +56,7 @@ import { GlossaryManager } from "./components/GlossaryManager";
 import { FileTranslator } from "./components/FileTranslator";
 import { HistorySidebar } from "./components/HistorySidebar";
 import { AuthModal } from "./components/AuthModal";
+import { FeedbackModal } from "./components/FeedbackModal";
 import { PricingTable } from "./components/PricingTable";
 import AdBanner from "./components/AdBanner";
 
@@ -174,6 +175,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showPricingModal, setShowPricingModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showUpgradeSuccess, setShowUpgradeSuccess] = useState(false);
   const [successPlanName, setSuccessPlanName] = useState("");
@@ -1134,6 +1136,15 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Feedback & Rate us button */}
+            <button
+              onClick={() => setShowFeedbackModal(true)}
+              className="flex items-center gap-1.5 text-xs font-bold px-2 py-1.5 sm:px-3 sm:py-2 text-amber-600 hover:bg-amber-50 border border-amber-100 rounded-xl transition-all shadow-sm bg-white cursor-pointer"
+            >
+              <span className="text-amber-500">★</span>
+              <span className="hidden xs:inline">{isArabic ? "قيمنا" : "Rate us"}</span>
+            </button>
+
             {/* Pricing list button */}
             <button
               onClick={() => setShowPricingModal(true)}
@@ -2013,6 +2024,16 @@ export default function App() {
             onClose={() => setShowAuthModal(false)}
             onAuthSuccess={handleAuthSuccess}
             isArabic={isArabic}
+          />
+        )}
+
+        {/* Dynamic overall Feedback Modal */}
+        {showFeedbackModal && (
+          <FeedbackModal
+            isOpen={showFeedbackModal}
+            onClose={() => setShowFeedbackModal(false)}
+            isArabic={isArabic}
+            userEmail={currentUser?.email}
           />
         )}
 

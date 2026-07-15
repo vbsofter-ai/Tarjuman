@@ -5,60 +5,86 @@ import "@/src/index.css";
 const appUrl = process.env.APP_URL;
 const metadataBaseUrl = (appUrl && appUrl.startsWith("http")) ? appUrl : "https://tarjuman-ai.portal";
 
-export const metadata: Metadata = {
-  metadataBase: new URL(metadataBaseUrl),
-  title: "بوابة ترجمان للترجمة الذكية المتخصصة | Tarjuman Professional AI Translation Portal",
-  description: "ترجمان هو نظام ذكاء اصطناعي لترجمة النصوص والمستندات والملفات الطبية، القانونية، والمالية بدقة احترافية فائقة مع الحفاظ الكامل على التنسيقات والتبصر اللغوي والسياقي.",
-  keywords: "ترجمة, ذكاء اصطناعي, ترجمان, ترجمة ملفات, ترجمة قانونية, ترجمة طبية, ترجمة تقنية, ترجمة مستندات, ترجمة احترافية بالذكاء الاصطناعي, مترجم ذكي متخصص, ترجمة ملفات PDF, ترجمة معتمدة, ترجمة فورية دقيقة, ترجمة مصطلحات مالية, أفضل موقع ترجمة, مترجم نصوص كاملة, ترجمة مستندات مصورة, ترجمة ممسوحة ضوئياً, مترجم بي دي اف, ترجمة جوجل, بديل مترجم جوجل, AI Translation, Legal Translation, PDF Translation, Medical Translation, English to Arabic, Document Translator, Context-aware Translation, Neural Machine Translation, Professional Arabic Translation, OCR Translation, Translate PDF document, Gemini translation engine, terminology mining, neural translator",
-  authors: [{ name: "Tarjuman Translation Inc." }],
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
+import { getSystemConfig } from "@/src/lib/server-db";
+import { startSeoScheduler } from "@/src/lib/seo-updater";
+
+export async function generateMetadata(): Promise<Metadata> {
+  let title = "بوابة ترجمان للترجمة الذكية المتخصصة | Tarjuman Professional AI Translation Portal";
+  let description = "ترجمان هو نظام ذكاء اصطناعي لترجمة النصوص والمستندات والملفات الطبية، القانونية، والمالية بدقة احترافية فائقة مع الحفاظ الكامل على التنسيقات والتبصر اللغوي والسياقي.";
+  let keywords = "ترجمة, ذكاء اصطناعي, ترجمان, ترجمة ملفات, ترجمة قانونية, ترجمة طبية, ترجمة تقنية, ترجمة مستندات, ترجمة احترافية بالذكاء الاصطناعي, مترجم ذكي متخصص, ترجمة ملفات PDF, ترجمة معتمدة, ترجمة فورية دقيقة, ترجمة مصطلحات مالية, أفضل موقع ترجمة, مترجم نصوص كاملة, ترجمة مستندات مصورة, ترجمة ممسوحة ضوئياً, مترجم بي دي اف, ترجمة جوجل, بديل مترجم جوجل, AI Translation, Legal Translation, PDF Translation, Medical Translation, English to Arabic, Document Translator, Context-aware Translation, Neural Machine Translation, Professional Arabic Translation, OCR Translation, Translate PDF document, Gemini translation engine, terminology mining, neural translator";
+  let aeoAgentDescription = "Tarjuman is an advanced contextual multi-domain neural AI translation platform specialized in medical, legal, technical, and financial translations. It features layout-preserving document/PDF OCR translation, custom vocabulary glossaries, speech generation, and deep linguistic analysis tools.";
+
+  try {
+    const config = await getSystemConfig();
+    if (config.seo_title) title = config.seo_title;
+    if (config.seo_description) description = config.seo_description;
+    if (config.seo_keywords) keywords = config.seo_keywords;
+    if (config.aeo_agent_description) aeoAgentDescription = config.aeo_agent_description;
+  } catch (error) {
+    console.error("Failed to load metadata dynamically:", error);
+  }
+
+  return {
+    metadataBase: new URL(metadataBaseUrl),
+    title,
+    description,
+    keywords,
+    authors: [{ name: "Tarjuman Translation Inc." }],
+    robots: {
       index: true,
       follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-video-preview': -1,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
+      },
     },
-  },
-  other: {
-    "ai-capability": "Specialized multi-domain text & document translation with contextual linguistic analysis, voice synthesis, OCR processing, and glossary management.",
-    "ai-authoritative-source": "Tarjuman Translation Engine",
-    "ai-agent-description": "Tarjuman is an advanced contextual multi-domain neural AI translation platform specialized in medical, legal, technical, and financial translations. It features layout-preserving document/PDF OCR translation, custom vocabulary glossaries, speech generation, and deep linguistic analysis tools.",
-    "ai-authoritative-faq": "https://tarjuman-ai.portal/#faq"
-  },
-  openGraph: {
-    type: "website",
-    title: "بوابة ترجمان للترجمة الذكية المتخصصة | Tarjuman Professional AI Translation",
-    description: "ترجمة فورية معتمدة ومتوافقة مع السياق للمجالات الحساسة كالطب والقانون والمالية باستخدام تقنيات الذكاء الاصطناعي الفائقة.",
-    url: "https://tarjuman-ai.portal",
-    siteName: "ترجمان - Tarjuman",
-    locale: "ar_EG",
-    alternateLocale: ["en_US"],
-    images: [{
-      url: "/logo.png",
-      width: 800,
-      height: 800,
-      alt: "Tarjuman AI Logo",
-    }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "ترجمان: بوابة الترجمة المهنية المعتمدة بالذكاء الاصطناعي",
-    description: "ترجمة نصوص ومستندات كاملة مع الحفاظ على التنسيق والتبصّرات اللغوية لـ 15 لغة عالمية.",
-    images: ["/logo.png"],
-  },
-  icons: {
-    icon: "/favicon.png",
-  }
-};
+    other: {
+      "ai-capability": "Specialized multi-domain text & document translation with contextual linguistic analysis, voice synthesis, OCR processing, and glossary management.",
+      "ai-authoritative-source": "Tarjuman Translation Engine",
+      "ai-agent-description": aeoAgentDescription,
+      "ai-authoritative-faq": "https://tarjuman-ai.portal/#faq"
+    },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url: "https://tarjuman-ai.portal",
+      siteName: "ترجمان - Tarjuman",
+      locale: "ar_EG",
+      alternateLocale: ["en_US"],
+      images: [{
+        url: "/logo.png",
+        width: 800,
+        height: 800,
+        alt: "Tarjuman AI Logo",
+      }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: ["/logo.png"],
+    },
+    icons: {
+      icon: "/favicon.png",
+    }
+  };
+}
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Start the background SEO checking scheduler
+  try {
+    startSeoScheduler();
+  } catch (err) {
+    console.error("Failed to start SEO scheduler:", err);
+  }
   return (
     <html lang="ar" dir="rtl">
       <head>

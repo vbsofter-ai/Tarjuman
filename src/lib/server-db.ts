@@ -206,25 +206,31 @@ export async function initializeDatabase() {
       [superAdminPerms]
     );
 
-    // Seed default configuration if empty
-    const [configRows]: any = await conn.query("SELECT COUNT(*) as count FROM tarjuman_system_config");
-    if (configRows[0].count === 0) {
-      const defaultConfig = {
-        defaultFreeLimit: 5000,
-        translationEngine: "gemini-3.5-flash",
-        requireAuthForUpload: true,
-        maintenanceMode: false,
-        enableLinguisticAnalysis: true,
-        logTranslationRequests: true,
-      };
-      for (const [key, val] of Object.entries(defaultConfig)) {
+    // Ensure all config keys exist (upsert/individual check)
+    const defaultConfig = {
+      defaultFreeLimit: 5000,
+      translationEngine: "gemini-3.5-flash",
+      requireAuthForUpload: true,
+      maintenanceMode: false,
+      enableLinguisticAnalysis: true,
+      logTranslationRequests: true,
+      seo_title: "بوابة ترجمان للترجمة الذكية المتخصصة | Tarjuman Professional AI Translation Portal",
+      seo_description: "ترجمان هو نظام ذكاء اصطناعي لترجمة النصوص والمستندات والملفات الطبية، القانونية، والمالية بدقة احترافية فائقة مع الحفاظ الكامل على التنسيقات والتبصر اللغوي والسياقي.",
+      seo_keywords: "ترجمة, ذكاء اصطناعي, ترجمان, ترجمة ملفات, ترجمة قانونية, ترجمة طبية, ترجمة تقنية, ترجمة مستندات, ترجمة احترافية بالذكاء الاصطناعي, مترجم ذكي متخصص, ترجمة ملفات PDF, ترجمة معتمدة, ترجمة فورية دقيقة, ترجمة مصطلحات مالية, أفضل موقع ترجمة, مترجم نصوص كاملة, ترجمة مستندات مصورة, ترجمة ممسوحة ضوئياً, مترجم بي دي اف, ترجمة جوجل, بديل مترجم جوجل, AI Translation, Legal Translation, PDF Translation, Medical Translation, English to Arabic, Document Translator, Context-aware Translation, Neural Machine Translation, Professional Arabic Translation, OCR Translation, Translate PDF document, Gemini translation engine, terminology mining, neural translator",
+      aeo_agent_description: "Tarjuman is an advanced contextual multi-domain neural AI translation platform specialized in medical, legal, technical, and financial translations. It features layout-preserving document/PDF OCR translation, custom vocabulary glossaries, speech generation, and deep linguistic analysis tools.",
+      last_seo_update: "1970-01-01T00:00:00.000Z",
+    };
+
+    for (const [key, val] of Object.entries(defaultConfig)) {
+      const [exists]: any = await conn.query("SELECT 1 FROM tarjuman_system_config WHERE config_key = ?", [key]);
+      if (exists.length === 0) {
         await conn.query(
           "INSERT INTO tarjuman_system_config (config_key, config_value) VALUES (?, ?)",
           [key, JSON.stringify(val)]
         );
       }
-      console.log("[DB] Seeded default system configurations.");
     }
+    console.log("[DB] Seeded and verified default system configurations.");
 
     // Seed default users if empty
     const [userRows]: any = await conn.query("SELECT COUNT(*) as count FROM tarjuman_users");
