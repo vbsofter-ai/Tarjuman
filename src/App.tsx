@@ -1600,13 +1600,25 @@ export default function App() {
                     selectedFile={fileAttached}
                     onFileLoaded={(file) => {
                       setFileAttached(file);
-                      if (file && !sourceText.trim()) {
-                        // Place a placeholder note
-                        setSourceText(
-                          isArabic
-                            ? `[جاري ترجمة مستند مرفق: ${file.name}]`
-                            : `[Translating attached file: ${file.name}]`
-                        );
+                      if (file) {
+                        if (!sourceText.trim() || (sourceText.startsWith("[") && sourceText.endsWith("]"))) {
+                          // Place a placeholder note
+                          setSourceText(
+                            isArabic
+                              ? `[جاري ترجمة مستند مرفق: ${file.name}]`
+                              : `[Translating attached file: ${file.name}]`
+                          );
+                        }
+                      } else {
+                        // Reset all translation states when file is removed
+                        setSourceText("");
+                        setTranslatedText("");
+                        setLinguisticAnalysis("");
+                        setAlternatives([]);
+                        setGlossaryApplied([]);
+                        setDetectedLang("");
+                        setDetectionConfidence(undefined);
+                        setAlternativeLanguages([]);
                       }
                     }}
                     isArabic={isArabic}
