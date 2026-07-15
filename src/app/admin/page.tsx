@@ -40,7 +40,16 @@ import {
   EyeOff,
   CornerDownLeft,
   ArrowRight,
-  Star
+  Star,
+  Zap,
+  MessageSquare,
+  BarChart3,
+  Wifi,
+  WifiOff,
+  ChevronUp,
+  ChevronDown,
+  Calendar,
+  Target
 } from "lucide-react";
 
 interface AdminUser {
@@ -111,6 +120,14 @@ export default function AdminPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [isArabic, setIsArabic] = useState(true);
+  const [liveClock, setLiveClock] = useState(new Date());
+  const [dbConnected, setDbConnected] = useState(true);
+
+  // Live clock tick
+  useEffect(() => {
+    const clockInterval = setInterval(() => setLiveClock(new Date()), 1000);
+    return () => clearInterval(clockInterval);
+  }, []);
 
   // States for dashboard data
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -485,38 +502,63 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-800 font-sans flex flex-col" dir={isArabic ? "rtl" : "ltr"}>
       {/* Header */}
-      <header className="p-5 border-b border-slate-800 bg-slate-950 flex items-center justify-between text-white">
+      <header className="px-5 py-3.5 border-b border-slate-800 bg-slate-950 flex items-center justify-between text-white">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-600/20">
+          <div className="p-2.5 bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-2xl shadow-lg shadow-indigo-600/30">
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg font-black tracking-tight flex items-center gap-2">
-              <span>{isArabic ? "لوحة تحكم المدير الفائق" : "Super Admin Administrative Console"}</span>
-              <span className="text-[9px] font-black uppercase tracking-widest bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full">
+            <h1 className="text-base font-black tracking-tight flex items-center gap-2">
+              <span>{isArabic ? "لوحة تحكم المدير الفائق" : "Super Admin Console"}</span>
+              <span className="text-[8px] font-black uppercase tracking-widest bg-gradient-to-r from-indigo-500/10 to-violet-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full">
                 ROOT
               </span>
             </h1>
-            <p className="text-xs text-slate-400 font-medium">
+            <p className="text-[10px] text-slate-500 font-medium">
               {isArabic ? "مراقبة حركة الزيارات، تعديل الصلاحيات، وضبط معاملات محركات الترجمة" : "Monitor traffic diagnostics, role systems, quotas and configuration engines"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {/* Live System Health Pulse */}
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-slate-900/80 border border-slate-800 rounded-xl text-[10px] font-bold text-slate-400">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-emerald-400">{isArabic ? "متصل" : "Online"}</span>
+            <span className="text-slate-600">|</span>
+            <Clock className="w-3 h-3 text-slate-500" />
+            <span className="font-mono text-slate-300 tabular-nums">
+              {liveClock.toLocaleTimeString(isArabic ? "ar-EG" : "en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+          </div>
+
+          {/* Admin Identity Badge */}
+          {currentUser && (
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-900/80 border border-slate-800 rounded-xl">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 text-white text-[10px] font-black flex items-center justify-center uppercase">
+                {currentUser.name?.charAt(0)}
+              </div>
+              <div className="text-left">
+                <p className="text-[10px] font-bold text-white leading-none">{currentUser.name}</p>
+                <p className="text-[8px] text-slate-500 font-mono">{currentUser.email}</p>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={() => setIsArabic(!isArabic)}
-            className="text-xs font-bold px-3 py-2 border border-slate-800 hover:bg-slate-800 rounded-xl transition-all cursor-pointer bg-slate-900 text-slate-300"
+            className="text-[10px] font-bold px-2.5 py-1.5 border border-slate-800 hover:bg-slate-800 rounded-xl transition-all cursor-pointer bg-slate-900 text-slate-300"
           >
-            {isArabic ? "English (EN)" : "العربية (AR)"}
+            {isArabic ? "EN" : "AR"}
           </button>
           <button
-            onClick={() => {
-              window.location.href = "/";
-            }}
-            className="flex items-center gap-2 text-xs font-bold px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl transition-all cursor-pointer"
+            onClick={() => { window.location.href = "/"; }}
+            className="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl transition-all cursor-pointer"
           >
-            <ArrowRight className="w-4 h-4" />
-            <span>{isArabic ? "الرجوع للمترجم" : "Exit Console"}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{isArabic ? "الرجوع للمترجم" : "Exit Console"}</span>
           </button>
         </div>
       </header>
@@ -524,91 +566,66 @@ export default function AdminPage() {
       {/* Main Container */}
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-full md:w-64 border-r border-slate-800 bg-slate-950 p-4 flex flex-col gap-1.5 flex-shrink-0 text-white border-l-0">
-          <p className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest px-3 mb-2 text-left">
+        <aside className="w-full md:w-60 border-r border-slate-800 bg-slate-950 p-3 flex flex-col gap-1 flex-shrink-0 text-white border-l-0">
+          <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-[0.15em] px-3 mb-2 mt-1 text-left">
             {isArabic ? "أدوات المدير الفائق" : "Super Admin Tools"}
           </p>
           
-          <button
-            onClick={() => setActiveTab("overview")}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "overview"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10"
-                : "text-slate-400 hover:bg-slate-900 hover:text-white"
-            }`}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            <span>{isArabic ? "الإحصائيات الأساسية" : "Console Overview"}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("analytics")}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "analytics"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10"
-                : "text-slate-400 hover:bg-slate-900 hover:text-white"
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" />
-            <span>{isArabic ? "تحليلات حركة المرور" : "Traffic & Visit Stats"}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("users")}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "users"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10"
-                : "text-slate-400 hover:bg-slate-900 hover:text-white"
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>{isArabic ? "الأعضاء والصلاحيات" : "User Roles & Quotas"}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "settings"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10"
-                : "text-slate-400 hover:bg-slate-900 hover:text-white"
-            }`}
-          >
-            <Sliders className="w-4 h-4" />
-            <span>{isArabic ? "إعدادات المترجم" : "Translation Control"}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("logs")}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "logs"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10"
-                : "text-slate-400 hover:bg-slate-900 hover:text-white"
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            <span>{isArabic ? "سجلات العمليات" : "Audit logs"}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("feedbacks")}
-            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "feedbacks"
-                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/10"
-                : "text-slate-400 hover:bg-slate-900 hover:text-white"
-            }`}
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>{isArabic ? "آراء وتقييمات العملاء" : "Customer Feedbacks"}</span>
-          </button>
+          {[
+            { id: "overview" as const, icon: LayoutDashboard, labelAr: "نظرة عامة", labelEn: "Overview", badge: null },
+            { id: "analytics" as const, icon: BarChart3, labelAr: "تحليلات الزيارات", labelEn: "Traffic Analytics", badge: analytics?.totalVisits || null },
+            { id: "users" as const, icon: Users, labelAr: "الأعضاء والصلاحيات", labelEn: "Users & Roles", badge: totalUsersCount || null },
+            { id: "settings" as const, icon: Sliders, labelAr: "إعدادات المحرك", labelEn: "Engine Settings", badge: null },
+            { id: "logs" as const, icon: Activity, labelAr: "سجلات العمليات", labelEn: "Audit Logs", badge: liveLogs.length || null },
+            { id: "feedbacks" as const, icon: MessageSquare, labelAr: "تقييمات العملاء", labelEn: "Feedbacks", badge: feedbacks.length || null },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer group ${
+                activeTab === tab.id
+                  ? "bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-600/20"
+                  : "text-slate-400 hover:bg-slate-900/80 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <tab.icon className="w-4 h-4" />
+                <span>{isArabic ? tab.labelAr : tab.labelEn}</span>
+              </div>
+              {tab.badge !== null && (
+                <span className={`text-[9px] font-black min-w-[20px] text-center px-1.5 py-0.5 rounded-md ${
+                  activeTab === tab.id
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-800 text-slate-500 group-hover:bg-slate-700 group-hover:text-slate-300"
+                }`}>
+                  {tab.badge > 999 ? `${(tab.badge / 1000).toFixed(1)}k` : tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
 
           {/* Diagnostics Download */}
-          <div className="mt-auto pt-6 border-t border-slate-900 hidden md:block">
+          <div className="mt-auto pt-4 border-t border-slate-900 hidden md:block space-y-2">
+            {/* Quick System Status */}
+            <div className="px-3 py-2.5 bg-slate-900/50 border border-slate-800/60 rounded-xl space-y-2">
+              <p className="text-[9px] font-extrabold text-slate-600 uppercase tracking-wider">{isArabic ? "حالة المحرك" : "Engine Status"}</p>
+              <div className="flex items-center gap-2 text-[10px] font-semibold">
+                <Zap className="w-3 h-3 text-indigo-400" />
+                <span className="text-slate-400 truncate">{systemConfig.translationEngine}</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-semibold">
+                {systemConfig.maintenanceMode 
+                  ? <><WifiOff className="w-3 h-3 text-rose-400" /><span className="text-rose-400">{isArabic ? "وضع الصيانة" : "Maintenance"}</span></>
+                  : <><Wifi className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400">{isArabic ? "يعمل بكفاءة" : "Operational"}</span></>
+                }
+              </div>
+            </div>
             <button
               onClick={downloadDiagnostics}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-slate-800 hover:bg-slate-900 rounded-xl text-xs font-bold text-slate-400 hover:text-white transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-slate-800 hover:bg-slate-900 rounded-xl text-[10px] font-bold text-slate-500 hover:text-white transition-colors cursor-pointer"
             >
-              <Download className="w-4 h-4" />
-              <span>{isArabic ? "تصدير فحص تشخيصي" : "Export Diagnostics"}</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>{isArabic ? "تصدير تشخيصي" : "Export Diagnostics"}</span>
             </button>
           </div>
         </aside>
@@ -625,7 +642,37 @@ export default function AdminPage() {
               
               {/* TAB 1: OVERVIEW */}
               {activeTab === "overview" && (
-                <div className="space-y-6">
+                <div className="space-y-5">
+                  {/* Welcome Banner */}
+                  <div className="relative overflow-hidden bg-gradient-to-r from-indigo-600/10 via-violet-600/10 to-indigo-600/5 border border-indigo-500/20 rounded-2xl p-5">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.15),transparent_60%)]"></div>
+                    <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="space-y-1.5">
+                        <h2 className="text-lg font-black text-white flex items-center gap-2">
+                          {isArabic ? `مرحباً، ${currentUser?.name?.split(" ")[0]} 👋` : `Welcome back, ${currentUser?.name?.split(" ")[0]} 👋`}
+                        </h2>
+                        <p className="text-xs text-slate-400 font-medium flex items-center gap-2">
+                          <Calendar className="w-3.5 h-3.5" />
+                          {liveClock.toLocaleDateString(isArabic ? "ar-EG" : "en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-center">
+                          <p className="text-lg font-black text-white">{totalUsersCount}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase">{isArabic ? "مستخدم" : "Users"}</p>
+                        </div>
+                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-center">
+                          <p className="text-lg font-black text-emerald-400">{premiumUsersCount}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase">{isArabic ? "مميز" : "Premium"}</p>
+                        </div>
+                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2 text-center">
+                          <p className="text-lg font-black text-indigo-400">{analytics?.totalVisits || 0}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase">{isArabic ? "زيارة" : "Visits"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Dashboard Metrics Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div className="bg-slate-950 border border-slate-800 rounded-3xl p-5 flex items-center justify-between shadow-sm">
@@ -679,6 +726,61 @@ export default function AdminPage() {
                       </div>
                       <div className="p-3 bg-amber-500/10 text-amber-400 rounded-2xl">
                         <Star className="w-6 h-6" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quota Utilization & User Distribution */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Global Quota Utilization */}
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+                      <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                        <Target className="w-4 h-4 text-indigo-400" />
+                        <span>{isArabic ? "استهلاك الحصة الإجمالية للمنصة" : "Platform Global Quota Usage"}</span>
+                      </h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                          <span>{totalQuotaUsed.toLocaleString()} {isArabic ? "كلمة مستهلكة" : "words used"}</span>
+                          <span>{totalQuotaLimit.toLocaleString()} {isArabic ? "الحد الأقصى" : "total limit"}</span>
+                        </div>
+                        <div className="relative h-3 bg-slate-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-600 via-violet-500 to-indigo-400 transition-all duration-700"
+                            style={{ width: `${Math.min(100, (totalQuotaUsed / (totalQuotaLimit || 1)) * 100)}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-500 text-center">
+                          {((totalQuotaUsed / (totalQuotaLimit || 1)) * 100).toFixed(1)}% {isArabic ? "من الحد المتاح" : "of total capacity"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* User Plan Distribution */}
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+                      <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-violet-400" />
+                        <span>{isArabic ? "توزيع الاشتراكات حسب الخطة" : "Subscriptions Breakdown"}</span>
+                      </h4>
+                      <div className="space-y-2.5">
+                        {[
+                          { plan: "enterprise", labelAr: "شركات", labelEn: "Enterprise", color: "bg-emerald-500", textColor: "text-emerald-400" },
+                          { plan: "pro", labelAr: "احترافي", labelEn: "Pro", color: "bg-indigo-500", textColor: "text-indigo-400" },
+                          { plan: "free", labelAr: "مجاني", labelEn: "Free", color: "bg-slate-600", textColor: "text-slate-400" },
+                        ].map((p) => {
+                          const count = usersArray.filter(u => u.plan === p.plan).length;
+                          const pct = totalUsersCount ? (count / totalUsersCount) * 100 : 0;
+                          return (
+                            <div key={p.plan} className="space-y-1">
+                              <div className="flex justify-between text-[10px] font-bold">
+                                <span className={p.textColor}>{isArabic ? p.labelAr : p.labelEn}</span>
+                                <span className="text-slate-400">{count} ({pct.toFixed(0)}%)</span>
+                              </div>
+                              <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${p.color} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -1209,6 +1311,29 @@ export default function AdminPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Rating Distribution Histogram */}
+                  {feedbacks.length > 0 && (
+                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 space-y-3">
+                      <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">{isArabic ? "توزيع التقييمات" : "Rating Distribution"}</p>
+                      <div className="space-y-1.5">
+                        {[5, 4, 3, 2, 1].map((star) => {
+                          const count = feedbacks.filter(f => f.rating === star).length;
+                          const pct = feedbacks.length ? (count / feedbacks.length) * 100 : 0;
+                          return (
+                            <div key={star} className="flex items-center gap-2 text-[10px]">
+                              <span className="text-amber-400 font-bold w-4 text-center">{star}</span>
+                              <span className="text-slate-600">★</span>
+                              <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-slate-500 font-bold w-8 text-right">{count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Feedbacks list */}
                   <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
