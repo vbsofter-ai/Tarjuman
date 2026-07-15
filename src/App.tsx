@@ -327,37 +327,47 @@ export default function App() {
     setShowProfileDropdown(false);
   };
 
-  const handleSubscribe = (planId: "free" | "pro" | "enterprise") => {
+  const handleSubscribe = async (planId: "free" | "pro" | "enterprise") => {
     if (!currentUser) {
       // User is not signed in. Open AuthModal first!
       setShowAuthModal(true);
       return;
     }
 
-    const quotaLimits = {
-      free: 5000,
-      pro: 100000,
-      enterprise: 9999999, // practically unlimited
-    };
+    try {
+      const res = await fetch("/api/auth/subscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: currentUser.email,
+          planId: planId,
+        }),
+      });
 
-    const updatedUser: User = {
-      ...currentUser,
-      plan: planId,
-      quotaLimit: quotaLimits[planId],
-    };
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Failed to update subscription");
+      }
 
-    setCurrentUser(updatedUser);
-    localStorage.setItem("tarjuman_current_user", JSON.stringify(updatedUser));
+      // Update state and local storage with the user returned by the server
+      setCurrentUser(data);
+      localStorage.setItem("tarjuman_current_user", JSON.stringify(data));
 
-    // Display beautiful success alert/modal
-    const planNames = {
-      free: isArabic ? "الباقة المجانية" : "Free Plan",
-      pro: isArabic ? "الباقة الاحترافية Pro" : "Pro Professional Plan",
-      enterprise: isArabic ? "باقة الشركات والاعمال" : "Enterprise Master Plan",
-    };
-    setSuccessPlanName(planNames[planId]);
-    setShowUpgradeSuccess(true);
-    setShowPricingModal(false);
+      // Display beautiful success alert/modal
+      const planNames = {
+        free: isArabic ? "الباقة المجانية" : "Free Plan",
+        pro: isArabic ? "الباقة الاحترافية Pro" : "Pro Professional Plan",
+        enterprise: isArabic ? "باقة الشركات والاعمال" : "Enterprise Master Plan",
+      };
+      setSuccessPlanName(planNames[planId]);
+      setShowUpgradeSuccess(true);
+      setShowPricingModal(false);
+    } catch (err: any) {
+      console.error("Subscription upgrade error:", err);
+      setError(isArabic ? "فشل ترقية الباقة. الرجاء المحاولة مرة أخرى." : "Failed to upgrade plan. Please try again.");
+    }
   };
 
   // Preserved formatting translated file download
