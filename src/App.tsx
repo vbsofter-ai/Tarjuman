@@ -38,7 +38,8 @@ import {
   CheckCircle2,
   Lock,
   ShieldCheck,
-  PencilLine
+  PencilLine,
+  X
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -186,6 +187,7 @@ export default function App() {
   // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -1002,10 +1004,14 @@ export default function App() {
     setIsTranslating(true);
     setError("");
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const res = await fetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           text: textToTranslate,
           sourceLang,
@@ -1068,10 +1074,22 @@ export default function App() {
       saveHistoryToStorage([historyItem, ...history]);
 
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to contact translation service.");
+      if (err.name === "AbortError") {
+        setError(isArabic ? "تم إلغاء عملية الترجمة." : "Translation process was cancelled.");
+      } else {
+        console.error(err);
+        setError(err.message || "Failed to contact translation service.");
+      }
     } finally {
       setIsTranslating(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  // Abort ongoing translation request
+  const handleCancelTranslation = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
@@ -1958,14 +1976,24 @@ export default function App() {
                     </button>
                   </div>
 
-                  <button
-                    onClick={() => handleTranslate()}
-                    disabled={isTranslating || (!sourceText.trim() && !fileAttached)}
-                    className="flex items-center gap-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 active:scale-95 cursor-pointer"
-                  >
-                    <Sparkles className="w-4 h-4 animate-pulse" />
-                    <span>{isArabic ? "ترجم الآن" : "Translate"}</span>
-                  </button>
+                  {isTranslating ? (
+                    <button
+                      onClick={handleCancelTranslation}
+                      className="flex items-center gap-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 px-4 py-2.5 rounded-xl transition-all shadow-md shadow-rose-600/10 hover:shadow-rose-600/20 active:scale-95 cursor-pointer border-0"
+                    >
+                      <X className="w-4 h-4" />
+                      <span>{isArabic ? "إيقاف الترجمة" : "Stop"}</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleTranslate()}
+                      disabled={!sourceText.trim() && !fileAttached}
+                      className="flex items-center gap-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 active:scale-95 cursor-pointer border-0"
+                    >
+                      <Sparkles className="w-4 h-4 animate-pulse" />
+                      <span>{isArabic ? "ترجم الآن" : "Translate"}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

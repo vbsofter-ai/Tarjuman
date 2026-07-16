@@ -243,14 +243,13 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
       />
 
       {isExtracting ? (
-        <div className="border-2 border-dashed rounded-2xl p-8 text-center border-indigo-500 bg-indigo-50/30 animate-pulse">
-          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-sm font-bold text-slate-700">
-            {isArabic ? "جاري قراءة واستخراج النصوص من الملف..." : "Extracting text content from document..."}
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            {isArabic ? "يرجى الانتظار، قد يستغرق هذا بضع ثوانٍ..." : "Please wait, this might take a few seconds..."}
-          </p>
+        <div className="border border-dashed rounded-xl p-3 text-center border-indigo-500 bg-indigo-50/20 animate-pulse flex items-center justify-center gap-3">
+          <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className="text-left">
+            <p className="text-xs font-bold text-slate-700">
+              {isArabic ? "جاري قراءة واستخراج نصوص الملف..." : "Extracting file text..."}
+            </p>
+          </div>
         </div>
       ) : !selectedFile ? (
         <div
@@ -259,58 +258,57 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
           onDragLeave={handleDrag}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
+          className={`relative border border-dashed rounded-xl p-3 cursor-pointer transition-all flex items-center gap-3 justify-center ${
             dragActive
-              ? "border-indigo-500 bg-indigo-50/30 ring-4 ring-indigo-500/10"
-              : "border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300"
+              ? "border-indigo-500 bg-indigo-50/20 ring-2 ring-indigo-500/10"
+              : "border-slate-200 bg-slate-50/30 hover:bg-slate-50 hover:border-slate-300"
           }`}
         >
-          <div className="p-3 bg-white border border-slate-100 rounded-xl shadow-sm w-fit mx-auto mb-3 text-slate-500 transition-transform group-hover:scale-105">
-            <Upload className="w-6 h-6 text-indigo-600" />
+          <div className="p-2 bg-white border border-slate-100 rounded-lg shadow-xs text-slate-500 flex-shrink-0">
+            <Upload className="w-4 h-4 text-indigo-600" />
           </div>
 
-          <h4 className="text-sm font-semibold text-slate-700 mb-1">
-            {isArabic ? "ترجمة ملف أو صورة" : "Translate File or Image"}
-          </h4>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto mb-2">
-            {isArabic
-              ? "اسحب وأفلت الملف هنا أو انقر للتصفح. ندعم المستندات والصور (PDF, DOCX, TXT, PNG, JPG)"
-              : "Drag and drop your file here, or click to browse. Supports PDF, DOCX, TXT, PNG, JPG"}
-          </p>
-          <span className="inline-block text-[10px] font-medium px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">
-            {isArabic ? "الحد الأقصى: 10 ميجابايت" : "Max size: 10MB"}
-          </span>
+          <div className="text-right sm:text-right" dir={isArabic ? "rtl" : "ltr"}>
+            <h4 className="text-xs font-bold text-slate-700 leading-tight">
+              {isArabic ? "ترجمة ملف أو صورة" : "Translate File or Image"}
+            </h4>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              {isArabic
+                ? "اسحب أو انقر هنا لرفع الملف (PDF, DOCX, TXT, PNG, JPG) - الحد الأقصى 10 ميجابايت"
+                : "Click or drag your file here (PDF, DOCX, TXT, PNG, JPG) - Max 10MB"}
+            </p>
+          </div>
 
           {error && (
-            <div className="flex items-center justify-center gap-1.5 text-xs text-rose-500 mt-3 bg-rose-50/50 p-2 rounded-lg max-w-md mx-auto">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div className="absolute inset-x-0 -bottom-10 flex items-center justify-center gap-1.5 text-[10px] text-rose-500 bg-rose-50/50 p-1.5 rounded-lg max-w-md mx-auto border border-rose-100/50">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
               <span>{error}</span>
             </div>
           )}
         </div>
       ) : (
-        <div className="flex items-center justify-between gap-3 p-3.5 bg-indigo-50/30 border border-indigo-100 rounded-2xl">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex-shrink-0 p-2 bg-indigo-600/10 text-indigo-600 rounded-xl">
+        <div className="flex items-center justify-between gap-3 p-2 bg-indigo-50/20 border border-indigo-100 rounded-xl">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className="p-1.5 bg-indigo-600/10 text-indigo-600 rounded-lg flex-shrink-0">
               {isImageFile ? (
-                <ImageIcon className="w-5 h-5" />
+                <ImageIcon className="w-4 h-4" />
               ) : (
-                <FileText className="w-5 h-5" />
+                <FileText className="w-4 h-4" />
               )}
             </div>
 
-            <div className="overflow-hidden">
-              <p className="text-xs font-semibold text-slate-700 truncate max-w-[200px] sm:max-w-[300px]">
+            <div className="overflow-hidden text-right sm:text-right" dir={isArabic ? "rtl" : "ltr"}>
+              <p className="text-[11px] font-bold text-slate-700 truncate max-w-[150px] sm:max-w-[250px]">
                 {selectedFile.name}
               </p>
               <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                <p className="text-[10px] text-indigo-600/80 font-medium">
+                <p className="text-[9px] text-indigo-600/80 font-medium">
                   {formatFileSize(selectedFile.size)} •{" "}
                   {selectedFile.mimeType.split("/")[1]?.toUpperCase() || "DOC"}
                 </p>
                 {selectedFile.extractedText === "Scanned Document (AI Vision/OCR Translation Mode)" && (
-                  <span className="inline-block text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-100 rounded">
-                    {isArabic ? "ممسوح ضوئياً (ترجمة بصرية)" : "Scanned PDF (AI Vision Mode)"}
+                  <span className="inline-block text-[8px] font-bold px-1 py-0.2 bg-amber-50 text-amber-700 border border-amber-100 rounded">
+                    {isArabic ? "ترجمة بصرية" : "AI Vision Mode"}
                   </span>
                 )}
               </div>
@@ -322,16 +320,16 @@ export const FileTranslator: React.FC<FileTranslatorProps> = ({
               <img
                 src={`data:${selectedFile.mimeType};base64,${selectedFile.data}`}
                 alt="File Preview"
-                className="w-10 h-10 object-cover rounded-lg border border-indigo-100 bg-white"
+                className="w-7 h-7 object-cover rounded-md border border-indigo-100 bg-white"
               />
             )}
             <button
               type="button"
               onClick={clearFile}
-              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+              className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors cursor-pointer border-0 bg-transparent"
               title={isArabic ? "إزالة الملف" : "Remove File"}
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
