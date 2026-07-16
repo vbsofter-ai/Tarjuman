@@ -43,18 +43,24 @@ function loadConfig(): PaymobConfig {
   );
   const iframeId = parseInt(process.env.PAYMOB_IFRAME_ID || "1002380", 10);
   const hmacSecret = process.env.PAYMOB_HMAC || "";
-  const publicBaseUrl =
+  // Resolve a usable base URL. AI Studio templates ship with
+  // `APP_URL="MY_APP_URL"` as a placeholder — fall back to localhost in dev.
+  const rawBaseUrl =
     process.env.APP_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXTAUTH_URL ||
-    "http://localhost:3004";
+    "";
+  const isPlaceholder = !rawBaseUrl || /MY_APP_URL|REPLACE_ME|CHANGEME|placeholder/i.test(rawBaseUrl);
+  const publicBaseUrl = isPlaceholder
+    ? "http://localhost:3004"
+    : rawBaseUrl.replace(/\/+$/, "");
 
   return {
     apiKey,
     integrationIdCard,
     iframeId,
     hmacSecret,
-    publicBaseUrl: publicBaseUrl.replace(/\/+$/, ""),
+    publicBaseUrl,
     apiBase: PAYMOB_API_BASE,
   };
 }

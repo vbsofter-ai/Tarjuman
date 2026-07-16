@@ -252,6 +252,21 @@ export async function initializeDatabase() {
       }
     }
 
+    // Add quotaResetAt to users (used for monthly quota rollover).
+    try {
+      await conn.query("ALTER TABLE tarjuman_users ADD COLUMN quotaResetAt DATETIME");
+      console.log("[DB] Added 'quotaResetAt' column to tarjuman_users.");
+    } catch (err) {
+      // Already exists
+    }
+    // Add subscriptionStartedAt (used for the cycle anchor on paid plans).
+    try {
+      await conn.query("ALTER TABLE tarjuman_users ADD COLUMN subscriptionStartedAt DATETIME");
+      console.log("[DB] Added 'subscriptionStartedAt' column to tarjuman_users.");
+    } catch (err) {
+      // Already exists
+    }
+
     // Promote romyatef@gmail.com to super_admin in database and set all permissions
     const superAdminPerms = JSON.stringify(["super_admin", "dashboard", "users_view", "users_manage", "config_manage", "logs_view", "translate", "upload_files", "linguistic_analysis", "analytics_view"]);
     await conn.query(
@@ -876,6 +891,161 @@ export async function getAnalytics() {
     pageViews,
     referrers,
     browsers
+  };
+}
+
+// =====================================================================
+// QUOTA RESET — monthly rollover for the word quota on tarjuman_users
+// =====================================================================
+//
+// Each user has a `quotaResetAt` timestamp and a `quotaUsed` integer. On
+// upgrade/downgrade we set `quotaResetAt` to "now + 1 month". The reset
+// job (see runMonthlyQuotaReset below) walks the table and, for any user
+// whose `quotaResetAt` is in the past, sets `quotaUsed = 0` and pushes
+// the timestamp forward by another month.
+
+const QUOTA_LIMITS: Record<string, number> = {
+  free: 5000,
+  pro: 100000,
+  enterprise: 9999999,
+};
+
+function nextMonth(date: Date): Date {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + 1);
+  return d;
+}
+
+/**
+ * Stamp the cycle anchor for a user. Called after plan upgrades and on
+ * every successful reset. Does NOT touch `quotaUsed`.
+ */
+export async function setQuotaResetAt(id: string, at: Date): Promise<void> {
+  const isoAt = at.toISOString().slice(0, 19).replace("T", " ");
+  if (isFallbackMode) {
+    fallbackUsers = fallbackUsers.map(u => {
+      if (u.id === id) {
+        return { ...u, quotaResetAt: isoAt };
+      }
+      return u;
+    });
+    return;
+  }
+  try {
+    await pool.query("UPDATE tarjuman_users SET quotaResetAt = ? WHERE id = ?", [isoAt, id]);
+  } catch (error) {
+    console.error("[DB] setQuotaResetAt failed:", error);
+    isFallbackMode = true;
+  }
+}
+
+/**
+ * Reset the word quota for one user. Idempotent — only resets if the
+ * `quotaResetAt` is in the past. Returns `true` if a reset actually ran.
+ */
+export async function resetUserQuotaIfDue(email: string): Promise<boolean> {
+  const user = await getUserByEmail(email);
+  if (!user) return false;
+  const now = new Date();
+  const resetAt = user.quotaResetAt ? new Date(user.quotaResetAt) : null;
+  if (resetAt && resetAt > now) {
+    return false;
+  }
+  const newResetAt = resetAt ? nextMonth(resetAt) : nextMonth(now);
+
+  if (isFallbackMode) {
+    fallbackUsers = fallbackUsers.map(u => {
+      if (u.id === user.id) {
+        return { ...u, quotaUsed: 0, quotaResetAt: newResetAt.toISOString() };
+      }
+      return u;
+    });
+    return true;
+  }
+  try {
+    await pool.query(
+      "UPDATE tarjuman_users SET quotaUsed = 0, quotaResetAt = ? WHERE id = ?",
+      [newResetAt.toISOString().slice(0, 19).replace("T", " "), user.id]
+    );
+    return true;
+  } catch (error) {
+    console.error("[DB] resetUserQuotaIfDue failed:", error);
+    return false;
+  }
+}
+
+/**
+ * Walk all users and reset any whose `quotaResetAt` has passed. Returns
+ * the count of users that were reset. Safe to run periodically (e.g.
+ * from a daily CRON, or via the /api/admin/billing/reset-quotas endpoint).
+ */
+export async function runMonthlyQuotaReset(): Promise<{ reset: number; total: number; skipped: number }> {
+  await ensureInitialized();
+  const now = new Date();
+  let reset = 0;
+  let total = 0;
+  let skipped = 0;
+
+  if (isFallbackMode) {
+    for (const u of fallbackUsers) {
+      total++;
+      const due = !u.quotaResetAt || new Date(u.quotaResetAt) <= now;
+      if (!due) { skipped++; continue; }
+      u.quotaUsed = 0;
+      u.quotaResetAt = nextMonth(u.quotaResetAt ? new Date(u.quotaResetAt) : now).toISOString();
+      reset++;
+    }
+    return { reset, total, skipped };
+  }
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const [rows]: any = await conn.query("SELECT id, quotaResetAt FROM tarjuman_users");
+    total = rows.length;
+    for (const row of rows) {
+      const due = !row.quotaResetAt || new Date(row.quotaResetAt) <= now;
+      if (!due) { skipped++; continue; }
+      const next = nextMonth(row.quotaResetAt ? new Date(row.quotaResetAt) : now);
+      const iso = next.toISOString().slice(0, 19).replace("T", " ");
+      await conn.query("UPDATE tarjuman_users SET quotaUsed = 0, quotaResetAt = ? WHERE id = ?", [iso, row.id]);
+      reset++;
+    }
+  } catch (error) {
+    console.error("[DB] runMonthlyQuotaReset failed:", error);
+  } finally {
+    if (conn) conn.release();
+  }
+  return { reset, total, skipped };
+}
+
+/**
+ * Return quota status info for a user: used / limit / resetAt / daysUntilReset.
+ * Also opportunistically resets the quota if it's due (so callers don't
+ * have to remember). Use this in /api/translate to keep state always correct.
+ */
+export async function getQuotaStatus(email: string): Promise<{
+  quotaUsed: number;
+  quotaLimit: number;
+  quotaResetAt: string | null;
+  daysUntilReset: number;
+  wasReset: boolean;
+} | null> {
+  // Lazy reset if due.
+  const wasReset = await resetUserQuotaIfDue(email);
+  const user = await getUserByEmail(email);
+  if (!user) return null;
+  const resetAt = user.quotaResetAt ? new Date(user.quotaResetAt) : null;
+  const now = new Date();
+  const daysUntilReset = resetAt
+    ? Math.max(0, Math.ceil((resetAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
+  return {
+    quotaUsed: wasReset ? 0 : user.quotaUsed,
+    quotaLimit: user.quotaLimit,
+    quotaResetAt: resetAt ? resetAt.toISOString() : null,
+    daysUntilReset,
+    wasReset,
   };
 }
 

@@ -32,17 +32,24 @@ function loadConfig(): PayPalConfig {
   const clientSecret = process.env.PAYPAL_SECRET_KEY || "";
   const mode: "sandbox" | "live" = (process.env.PAYPAL_MODE === "live" ? "live" : "sandbox");
   const baseUrl = mode === "live" ? LIVE_BASE : SANDBOX_BASE;
-  const publicBaseUrl =
+  // Resolve a usable base URL. AI Studio templates ship with
+  // `APP_URL="MY_APP_URL"` as a placeholder which PayPal will reject as
+  // an invalid URL — fall back to localhost in that case.
+  const rawBaseUrl =
     process.env.APP_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXTAUTH_URL ||
-    "http://localhost:3004";
+    "";
+  const isPlaceholder = !rawBaseUrl || /MY_APP_URL|REPLACE_ME|CHANGEME|placeholder/i.test(rawBaseUrl);
+  const publicBaseUrl = isPlaceholder
+    ? "http://localhost:3004"
+    : rawBaseUrl.replace(/\/+$/, "");
   return {
     clientId,
     clientSecret,
     baseUrl,
     mode,
-    publicBaseUrl: publicBaseUrl.replace(/\/+$/, ""),
+    publicBaseUrl,
   };
 }
 

@@ -119,6 +119,12 @@ export async function POST(req: NextRequest) {
           role: user.role,
           permissions: user.permissions,
         });
+        // Stamp the new billing cycle anchor: quota resets 1 month from now.
+        const cycleAnchor = new Date();
+        cycleAnchor.setMonth(cycleAnchor.getMonth() + 1);
+        if (typeof (await import("@/src/lib/server-db")).setQuotaResetAt === "function") {
+          await (await import("@/src/lib/server-db")).setQuotaResetAt(user.id, cycleAnchor);
+        }
         await logAction(
           "Subscription Plan Upgraded (PayPal Webhook)",
           "success",
@@ -235,6 +241,13 @@ export async function POST(req: NextRequest) {
       role: user.role,
       permissions: user.permissions,
     });
+    // Stamp the new billing cycle anchor: quota resets 1 month from now.
+    const cycleAnchor = new Date();
+    cycleAnchor.setMonth(cycleAnchor.getMonth() + 1);
+    const { setQuotaResetAt } = await import("@/src/lib/server-db");
+    if (typeof setQuotaResetAt === "function") {
+      await setQuotaResetAt(user.id, cycleAnchor);
+    }
     await logAction(
       "Subscription Plan Upgraded",
       "success",

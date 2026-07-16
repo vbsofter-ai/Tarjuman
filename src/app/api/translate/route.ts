@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Type } from "@google/genai";
 import { getGeminiClient, callWithRetry } from "@/src/lib/gemini";
 import { getUserByEmail, logAction, updateUserQuota } from "@/src/lib/server-db";
+import { getVertical } from "@/src/lib/verticals";
 
 const LANGUAGE_NAMES: Record<string, string> = {
   auto: "Auto Detect",
@@ -39,6 +40,46 @@ const TONE_CONTEXTS: Record<string, string> = {
   creative: "Lively, engaging, stylistic, and expressive.",
   academic: "Scholarly, authoritative, detailed, and passive-voiced where appropriate."
 };
+
+/**
+ * Domain → Gemini model.
+ *
+ * Specialised domains (legal, medical, financial, technical, academic) get the
+ * higher-quality Pro model because the willingness-to-pay for these verticals
+ * is high and a mistranslation is a real cost (legal liability, patient
+ * safety, audit risk). General / commercial / literary / agricultural
+ * translation uses the cheaper Flash model — the cost savings on these
+ * high-volume, low-margin requests directly fund the Pro spend on the
+ * specialised ones.
+ *
+ * Override via env (e.g. set GEMINI_MODEL=gemini-2.5-pro to force Pro for
+ * all traffic during a regression test).
+ */
+const SPECIALIZED_DOMAINS = new Set([
+  "legal",
+  "medical",
+  "financial",
+  "technical",
+  "academic",
+]);
+
+const DEFAULT_MODEL = process.env.GEMINI_MODEL
+  ? String(process.env.GEMINI_MODEL)
+  : "gemini-flash-latest";
+// 2026 update: gemini-2.5-pro is on the free tier with limit 0 for
+// most AI Studio keys. We default to the same Flash model the
+// general tier uses, so the system still works on free keys. Paid
+// deployments can override via GEMINI_SPECIALIZED_MODEL=gemini-2.5-pro.
+const SPECIALIZED_MODEL = process.env.GEMINI_SPECIALIZED_MODEL
+  ? String(process.env.GEMINI_SPECIALIZED_MODEL)
+  : "gemini-flash-latest";
+
+function pickModelForDomain(domain: string): { model: string; tier: "flash" | "pro" } {
+  if (SPECIALIZED_DOMAINS.has(domain)) {
+    return { model: SPECIALIZED_MODEL, tier: "pro" };
+  }
+  return { model: DEFAULT_MODEL, tier: "flash" };
+}
 
 export async function POST(req: Request) {
   try {
@@ -88,6 +129,12 @@ export async function POST(req: Request) {
     const toneDesc = TONE_CONTEXTS[tone] || TONE_CONTEXTS.formal;
 
     // Build system instructions
+    // We add the vertical-specific fragment from verticals.ts when the
+    // domain maps to one of our marketing verticals (legal/medical/financial/
+    // technical/academic/commercial). This locks terminology, register,
+    // and what NOT to do for high-stakes translations.
+    const vertical = getVertical(domain);
+
     let systemInstruction = `You are "Tarjuman AI" (ترجمان), a world-class professional translator and linguistic expert with absolute native fluency in both the source and target languages.
 Your goal is to translate the source text/file content with extreme accuracy, high readability, and cultural sensitivity.
 
@@ -96,7 +143,7 @@ Specific Guidelines:
 2. Source Language: If the input language is specified as ${srcLangName}, translate from it. If "Auto Detect" is specified, automatically detect the source language and output its code/name in the 'detectedLang' field.
 3. Specialized Domain: The translation is for a '${domain}' audience. ${domainDesc}
 4. Stylistic Tone: Maintain a '${tone}' tone. ${toneDesc}
-5. Format and Layout: Retain structural elements such as paragraph divisions and standard spacing in your translated output.
+5. Format and Layout: Retain structural elements such as paragraph divisions and standard spacing in your translated output.${vertical ? "\n" + vertical.systemPromptFragmentEn : ""}
 
 Language Detection & Confidence Guidelines:
 - For language detection, determine a confidence score between 0.0 and 1.0 and specify it in the 'detectionConfidence' field.
@@ -136,38 +183,54 @@ Ensure that if these terms are used, you mention them in the 'glossaryApplied' f
       return NextResponse.json({ error: "No text or file content provided for translation" }, { status: 400 });
     }
 
-    const response = await callWithRetry(() => 
+    const { model: selectedModel, tier: modelTier } = pickModelForDomain(domain);
+
+    const response = await callWithRetry(() =>
       ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: selectedModel,
         contents: parts,
         config: {
           systemInstruction,
           responseMimeType: "application/json",
+          // Explicit token budget — without this, the model can decide
+          // to spend most of its output on schema validation rather
+          // than the actual translation, which is the most common
+          // cause of mid-word truncation (e.g. "good" → "جد" instead
+          // of "جيد"). 8K is enough for ~3,000-word translations.
+          maxOutputTokens: parseInt(process.env.GEMINI_MAX_OUTPUT_TOKENS || "8192", 10),
+          // Lower temperature = more deterministic, faster, and less
+          // likely to add extra prose that the schema can't fit.
+          temperature: 0.3,
+          topP: 0.9,
+          topK: 40,
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              translatedText: { type: Type.STRING, description: "The final translated text or document translation." },
+              translatedText: {
+                type: Type.STRING,
+                description: "The final translated text. Must be a complete, non-truncated translation of the source. Preserve every sentence, paragraph break, and formatting marker from the source.",
+              },
               detectedLang: { type: Type.STRING, description: "The ISO 639-1 code of the detected source language (e.g. 'ar', 'fr', 'en')." },
               detectionConfidence: { type: Type.NUMBER, description: "Confidence score between 0.0 and 1.0." },
               alternativeLanguages: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: "ISO codes of alternative possible languages if confidence is low."
+                description: "ISO codes of alternative possible languages if confidence is low.",
               },
               glossaryApplied: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: "List of glossary source terms successfully applied in the translation."
+                description: "List of glossary source terms successfully applied in the translation.",
               },
               linguisticNotes: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
-                description: "Brief notes on grammatical, stylistic, cultural choices or terminology nuance."
-              }
+                description: "Brief notes on grammatical, stylistic, cultural choices or terminology nuance.",
+              },
             },
-            required: ["translatedText", "detectedLang", "detectionConfidence"]
-          }
-        }
+            required: ["translatedText", "detectedLang", "detectionConfidence"],
+          },
+        },
       })
     );
 
@@ -176,7 +239,31 @@ Ensure that if these terms are used, you mention them in the 'glossaryApplied' f
       throw new Error("Empty translation response from Gemini API");
     }
 
-    const translationResult = JSON.parse(jsonText);
+    let translationResult: any;
+    try {
+      translationResult = JSON.parse(jsonText);
+    } catch (parseErr: any) {
+      // The model sometimes returns the JSON inside a code fence despite
+      // responseMimeType being set. Try to extract the JSON substring.
+      const m = jsonText.match(/\{[\s\S]*\}/);
+      if (m) {
+        translationResult = JSON.parse(m[0]);
+      } else {
+        throw new Error(`Translation response was not valid JSON: ${parseErr?.message}`);
+      }
+    }
+
+    // Sanity check: translatedText must exist and be a non-trivial
+    // string. If the model returned something nonsensical, fall back
+    // to using the raw text so the user at least gets SOMETHING.
+    if (!translationResult.translatedText || typeof translationResult.translatedText !== "string") {
+      console.warn("[Translate] translatedText missing or non-string in response, falling back to raw text");
+      translationResult.translatedText = jsonText;
+    }
+    // Attach the model we used so the client (and the analytics row) can
+    // see which tier served this request.
+    (translationResult as any).modelTier = modelTier;
+    (translationResult as any).modelUsed = selectedModel;
 
     // Update quota and log in MySQL
     if (email) {
@@ -185,7 +272,7 @@ Ensure that if these terms are used, you mention them in the 'glossaryApplied' f
       await logAction(
         "Translation Request",
         "success",
-        `User ${email} - Domain: ${domain} (${directionStr}) - ${wordCount} words`
+        `User ${email} - Domain: ${domain} (${directionStr}, ${modelTier}/${selectedModel}) - ${wordCount} words`
       );
     }
 

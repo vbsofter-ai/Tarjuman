@@ -149,6 +149,13 @@ export async function POST(req: NextRequest) {
       role: user.role,
       permissions: user.permissions,
     });
+    // Stamp the new billing cycle anchor: quota resets 1 month from now.
+    const db = await import("@/src/lib/server-db");
+    const cycleAnchor = new Date();
+    cycleAnchor.setMonth(cycleAnchor.getMonth() + 1);
+    if (typeof (db as any).setQuotaResetAt === "function") {
+      await (db as any).setQuotaResetAt(user.id, cycleAnchor);
+    }
     await logAction(
       "Subscription Plan Upgraded (PayPal)",
       "success",

@@ -37,7 +37,8 @@ import {
   User as UserIcon,
   CheckCircle2,
   Lock,
-  ShieldCheck
+  ShieldCheck,
+  PencilLine
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -69,16 +70,15 @@ function TypewriterTranslation({ text }: { text: string }) {
       return;
     }
     
-    let index = 0;
-    setDisplayedText(text.charAt(0));
-    index = 1;
+    let currentIndex = 0;
+    setDisplayedText(""); // Reset text first
     
-    const stepTime = Math.max(3, Math.min(15, 250 / text.length));
+    const stepTime = Math.max(5, Math.min(25, 300 / text.length));
     
     const timer = setInterval(() => {
-      if (index < text.length) {
-        setDisplayedText((prev) => prev + text.charAt(index));
-        index++;
+      if (currentIndex < text.length) {
+        setDisplayedText(text.substring(0, currentIndex + 1));
+        currentIndex++;
       } else {
         clearInterval(timer);
       }
@@ -1612,6 +1612,16 @@ export default function App() {
 
                 {/* Input Area */}
                 <div className="flex-1 flex flex-col gap-2">
+                  {/* Source label */}
+                  <div className="flex items-center gap-1.5 px-1">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+                      <PencilLine className="w-3 h-3" />
+                      {isArabic ? "المصدر" : "SOURCE"}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {isArabic ? "النص الأصلي للترجمة" : "Original text to translate"}
+                    </span>
+                  </div>
                   <textarea
                     value={sourceText}
                     onChange={(e) => setSourceText(e.target.value)}
@@ -1620,7 +1630,13 @@ export default function App() {
                         ? "اكتب النص المراد ترجمته هنا، أو استخدم الميكروفون للإملاء الصوتي..."
                         : "Type your text here, or use the microphone to dictate..."
                     }
-                    className="w-full flex-1 min-h-[120px] bg-slate-50/50 p-3.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 text-sm leading-relaxed resize-none placeholder-slate-400"
+                    className="w-full flex-1 min-h-[120px] bg-slate-50 p-3.5 ps-5 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-slate-400/30 focus:border-slate-400 text-slate-900 text-sm leading-relaxed resize-none placeholder-slate-400 border-s-4 border-s-slate-400 relative"
+                    style={{
+                      borderLeftWidth: "4px",
+                      borderLeftColor: "#64748b", // slate-500
+                      fontFeatureSettings: "'liga' 1, 'calt' 1",
+                    }}
+                    dir="auto"
                   />
 
                   {/* Real-time word count & quota feedback panel */}
@@ -1802,7 +1818,20 @@ export default function App() {
                 )}
 
                 {/* Output Area */}
-                <div className="flex-1 bg-slate-50/50 p-4 border border-slate-200 rounded-xl relative flex flex-col justify-between">
+                <div
+                  className="flex-1 bg-emerald-50/50 p-4 border border-emerald-200 rounded-xl relative flex flex-col justify-between"
+                  style={{ borderRightWidth: "4px", borderRightColor: "#10b981" }}
+                >
+                  {/* Target label */}
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      <Check className="w-3 h-3" />
+                      {isArabic ? "الترجمة" : "TRANSLATION"}
+                    </span>
+                    <span className="text-[10px] text-emerald-700/80 font-medium">
+                      {isArabic ? "النص المترجم" : "Translated output"}
+                    </span>
+                  </div>
                   {isTranslating ? (
                     <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 rounded-xl z-10">
                       <div className="relative">
@@ -1815,11 +1844,11 @@ export default function App() {
                     </div>
                   ) : null}
 
-                  <div className="flex-1 text-sm text-slate-800 leading-relaxed overflow-y-auto min-h-[120px] whitespace-pre-wrap">
+                  <div className="flex-1 text-sm text-emerald-950 leading-relaxed overflow-y-auto min-h-[120px] whitespace-pre-wrap">
                     {translatedText ? (
                       <TypewriterTranslation text={translatedText} />
                     ) : (
-                      <span className="text-slate-400 italic">
+                      <span className="text-emerald-700/60 italic">
                         {isArabic
                           ? "ستظهر الترجمة الصياغية المحكمة هنا بعد كتابة النص والنقر على زر الترجمة..."
                           : "Your cohesive context-aware translation will appear here..."}

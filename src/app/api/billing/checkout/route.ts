@@ -140,9 +140,12 @@ export async function POST(req: NextRequest) {
         });
       } catch (err: any) {
         console.error("[Billing] PayPal create order failed:", err);
-        await logAction("PayPal Checkout Error", "error", `Failed to create PayPal order for ${email}: ${err?.message || err}`);
+        const paypalMsg = err?.message || String(err);
+        await logAction("PayPal Checkout Error", "error", `Failed to create PayPal order for ${email}: ${paypalMsg}`);
+        // Surface the actual PayPal error to the client so the operator can
+        // see what went wrong, instead of a generic message.
         return NextResponse.json(
-          { error: "Failed to create PayPal checkout session. Please try again or choose Paymob." },
+          { error: `PayPal error: ${paypalMsg}`, details: paypalMsg },
           { status: 502 }
         );
       }

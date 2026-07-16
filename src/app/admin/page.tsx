@@ -49,7 +49,14 @@ import {
   ChevronUp,
   ChevronDown,
   Calendar,
-  Target
+  Target,
+  Search as SearchIcon,
+  TrendingUp as TrendingUpIcon,
+  Hash,
+  RotateCcw,
+  History as HistoryIcon,
+  Wand2,
+  BookOpen
 } from "lucide-react";
 
 interface AdminUser {
@@ -143,8 +150,16 @@ export default function AdminPage() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [feedbacks, setFeedbacks] = useState<{ id: number; timestamp: string; email: string | null; rating: number; comment: string; details: string | null }[]>([]);
 
+  // SEO / AEO dashboard state
+  const [seoCurrent, setSeoCurrent] = useState<any | null>(null);
+  const [seoHistory, setSeoHistory] = useState<any[]>([]);
+  const [seoLoading, setSeoLoading] = useState(false);
+  const [seoUpdating, setSeoUpdating] = useState(false);
+  const [seoMessage, setSeoMessage] = useState<string | null>(null);
+  const [seoTab, setSeoTab] = useState<"current" | "keywords" | "faq" | "aeo" | "history">("current");
+
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "analytics" | "settings" | "logs" | "feedbacks">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "analytics" | "settings" | "logs" | "feedbacks" | "seo">("overview");
 
   // Search and Filter States
   const [searchTerm, setSearchTerm] = useState("");
@@ -279,7 +294,6 @@ export default function AdminPage() {
       initialConfigLoaded.current = true;
       return;
     }
-
     const saveSystemConfig = async () => {
       try {
         await fetch("/api/admin/config", {
@@ -297,6 +311,86 @@ export default function AdminPage() {
 
     saveSystemConfig();
   }, [systemConfig, isAuthorized, currentUser]);
+
+  // -------- SEO / AEO dashboard data fetcher --------
+  const fetchSeoData = async () => {
+    if (!currentUser) return;
+    setSeoLoading(true);
+    try {
+      const [currentRes, historyRes] = await Promise.all([
+        fetch(`/api/admin/seo?adminEmail=${encodeURIComponent(currentUser.email)}`),
+        fetch(`/api/admin/seo?adminEmail=${encodeURIComponent(currentUser.email)}&history=1`),
+      ]);
+      if (currentRes.ok) {
+        const data = await currentRes.json();
+        setSeoCurrent(data);
+      }
+      if (historyRes.ok) {
+        const data = await historyRes.json();
+        if (Array.isArray(data?.history)) setSeoHistory(data.history);
+      }
+    } catch (err) {
+      console.error("Failed to load SEO data:", err);
+      setSeoMessage(isArabic ? "فشل تحميل بيانات السيو" : "Failed to load SEO data");
+    } finally {
+      setSeoLoading(false);
+    }
+  };
+
+  const handleSeoForceUpdate = async () => {
+    if (!currentUser) return;
+    setSeoUpdating(true);
+    setSeoMessage(null);
+    try {
+      const res = await fetch("/api/admin/seo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminEmail: currentUser.email, force: true }),
+      });
+      const data = await res.json();
+      if (res.ok && data?.ran) {
+        setSeoMessage(
+          isArabic
+            ? `تم التحديث بنجاح (${data.snapshot?.faqCount || 0} أسئلة، ${data.snapshot?.capabilityCount || 0} إمكانيات، ~${data.snapshot?.tokensEstimated || 0} رمز)`
+            : `Update complete (${data.snapshot?.faqCount || 0} FAQ, ${data.snapshot?.capabilityCount || 0} capabilities, ~${data.snapshot?.tokensEstimated || 0} tokens)`
+        );
+        await fetchSeoData();
+      } else {
+        setSeoMessage(data?.reason || (isArabic ? "فشل التحديث" : "Update failed"));
+      }
+    } catch (err) {
+      setSeoMessage(String(err));
+    } finally {
+      setSeoUpdating(false);
+    }
+  };
+
+  const handleSeoRollback = async (generatedAt: string) => {
+    if (!currentUser) return;
+    if (!confirm(isArabic ? `هل تريد استعادة هذه النسخة من ${generatedAt}?` : `Restore snapshot from ${generatedAt}?`)) return;
+    try {
+      const res = await fetch("/api/admin/seo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminEmail: currentUser.email, rollback: generatedAt }),
+      });
+      if (res.ok) {
+        setSeoMessage(isArabic ? "تمت الاستعادة بنجاح" : "Snapshot restored");
+        await fetchSeoData();
+      } else {
+        setSeoMessage(isArabic ? "فشلت الاستعادة" : "Restore failed");
+      }
+    } catch (err) {
+      setSeoMessage(String(err));
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "seo" && isAuthorized === true && currentUser) {
+      fetchSeoData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isAuthorized, currentUser]);
 
   if (isAuthorized === null) {
     return (
@@ -576,6 +670,7 @@ export default function AdminPage() {
             { id: "analytics" as const, icon: BarChart3, labelAr: "تحليلات الزيارات", labelEn: "Traffic Analytics", badge: analytics?.totalVisits || null },
             { id: "users" as const, icon: Users, labelAr: "الأعضاء والصلاحيات", labelEn: "Users & Roles", badge: totalUsersCount || null },
             { id: "settings" as const, icon: Sliders, labelAr: "إعدادات المحرك", labelEn: "Engine Settings", badge: null },
+            { id: "seo" as const, icon: Wand2, labelAr: "SEO و AEO", labelEn: "SEO & AEO", badge: null },
             { id: "logs" as const, icon: Activity, labelAr: "سجلات العمليات", labelEn: "Audit Logs", badge: liveLogs.length || null },
             { id: "feedbacks" as const, icon: MessageSquare, labelAr: "تقييمات العملاء", labelEn: "Feedbacks", badge: feedbacks.length || null },
           ].map((tab) => (
@@ -1379,12 +1474,276 @@ export default function AdminPage() {
                 </div>
               )}
 
+              {/* TAB 7: SEO & AEO */}
+              {activeTab === "seo" && (
+                <div className="space-y-5">
+                  {/* Header card */}
+                  <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-100 pb-3 mb-4">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                          <Wand2 className="w-4 h-4 text-indigo-500" />
+                          <span>{isArabic ? "إدارة السيو و AEO التلقائية" : "Automatic SEO & AEO Engine"}</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                          {isArabic
+                            ? "يقوم النظام بتوليد الكلمات المفتاحية، الأسئلة الشائعة، والوصف للذكاء الاصطناعي (AEO) كل 24 ساعة تلقائياً. يمكنك فرض تحديث فوري أو استعادة نسخة سابقة."
+                            : "The system regenerates keywords, FAQ, and AI-crawler description (AEO) every 24h automatically. Force a refresh or roll back to any previous snapshot."}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={fetchSeoData}
+                          disabled={seoLoading}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${seoLoading ? "animate-spin" : ""}`} />
+                          <span>{isArabic ? "تحديث البيانات" : "Refresh"}</span>
+                        </button>
+                        <button
+                          onClick={handleSeoForceUpdate}
+                          disabled={seoUpdating}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-50 shadow-md shadow-indigo-600/20"
+                        >
+                          <Zap className={`w-3.5 h-3.5 ${seoUpdating ? "animate-pulse" : ""}`} />
+                          <span>{seoUpdating ? (isArabic ? "جاري التوليد..." : "Generating...") : (isArabic ? "تحديث فوري" : "Force Update")}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Status bar */}
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                        <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">{isArabic ? "آخر تحديث" : "Last Update"}</p>
+                        <p className="mt-1 text-sm font-bold text-slate-800">
+                          {seoCurrent?.last_seo_update
+                            ? new Date(seoCurrent.last_seo_update).toLocaleString(isArabic ? "ar-EG" : "en-US", { dateStyle: "short", timeStyle: "short" })
+                            : (isArabic ? "لم يبدأ بعد" : "Not yet")}
+                        </p>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                        <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">{isArabic ? "الموديل" : "Model"}</p>
+                        <p className="mt-1 text-sm font-bold text-slate-800 font-mono">
+                          {seoCurrent?.last_seo_model || "—"}
+                        </p>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                        <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">{isArabic ? "التكلفة" : "Cost"}</p>
+                        <p className="mt-1 text-sm font-bold text-slate-800">
+                          ~{seoCurrent?.last_seo_tokens_estimated || 0} {isArabic ? "رمز" : "tokens"}
+                        </p>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                        <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">{isArabic ? "المحتوى" : "Content"}</p>
+                        <p className="mt-1 text-sm font-bold text-slate-800">
+                          {seoCurrent?.current?.seo_faq_count || 0} FAQ · {seoCurrent?.current?.aeo_capability_count || 0} {isArabic ? "إمكانية" : "caps"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {seoMessage && (
+                      <div className="mt-3 p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-800 font-semibold">
+                        {seoMessage}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sub-tabs */}
+                  <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+                    <div className="flex items-center gap-1 border-b border-slate-100 mb-4 overflow-x-auto">
+                      {[
+                        { id: "current" as const, labelAr: "الحالي", labelEn: "Current", icon: Sparkles },
+                        { id: "keywords" as const, labelAr: "الكلمات المفتاحية", labelEn: "Keywords", icon: Hash },
+                        { id: "faq" as const, labelAr: "الأسئلة الشائعة", labelEn: "FAQ", icon: BookOpen },
+                        { id: "aeo" as const, labelAr: "AEO", labelEn: "AEO", icon: Wand2 },
+                        { id: "history" as const, labelAr: "السجل", labelEn: "History", icon: HistoryIcon },
+                      ].map((t) => {
+                        const Icon = t.icon;
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => setSeoTab(t.id)}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
+                              seoTab === t.id
+                                ? "border-indigo-600 text-indigo-700"
+                                : "border-transparent text-slate-500 hover:text-slate-800"
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                            {isArabic ? t.labelAr : t.labelEn}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* SEO sub-tab content */}
+                    {seoTab === "current" && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">SEO Title</p>
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 font-bold">
+                            {seoCurrent?.current?.seo_title || (isArabic ? "لم يتم التوليد بعد" : "Not generated yet")}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">SEO Description</p>
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 leading-relaxed">
+                            {seoCurrent?.current?.seo_description || "—"}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">{isArabic ? "الكلمات المفتاحية (40)" : "Keywords (40)"}</p>
+                          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 leading-relaxed">
+                            {seoCurrent?.current?.seo_keywords || "—"}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Keywords sub-tab */}
+                    {seoTab === "keywords" && (
+                      <div className="space-y-4">
+                        {(["primary", "longTail", "lsi", "trending"] as const).map((group) => {
+                          const labels: Record<string, { ar: string; en: string; dot: string }> = {
+                            primary: { ar: "كلمات أساسية (Primary)", en: "Primary Keywords", dot: "bg-indigo-500" },
+                            longTail: { ar: "كلمات طويلة (Long-Tail)", en: "Long-Tail Keywords", dot: "bg-emerald-500" },
+                            lsi: { ar: "كلمات دلالية (LSI)", en: "LSI Keywords", dot: "bg-amber-500" },
+                            trending: { ar: "كلمات رائجة (Trending)", en: "Trending Keywords", dot: "bg-rose-500" },
+                          };
+                          const items = (seoCurrent?.current?.seo_keyword_strategy?.[group] as string[]) || [];
+                          const l = labels[group];
+                          return (
+                            <div key={group}>
+                              <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <span className={`w-1.5 h-1.5 rounded-full ${l.dot}`}></span>
+                                {isArabic ? l.ar : l.en} · <span className="text-indigo-600">{items.length}</span>
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {items.length > 0
+                                  ? items.map((k, i) => (
+                                      <span key={i} className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                        {k}
+                                      </span>
+                                    ))
+                                  : <span className="text-xs text-slate-400 italic">{isArabic ? "لا توجد كلمات في هذه المجموعة" : "No items in this group"}</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* FAQ sub-tab */}
+                    {seoTab === "faq" && (
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                        {Array.isArray((seoCurrent as any)?.current?.seo_faq) && (seoCurrent as any).current.seo_faq.length > 0 ? (
+                          (seoCurrent as any).current.seo_faq.map((item: any, i: number) => (
+                            <div key={i} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">EN Question</p>
+                                <p className="text-sm font-bold text-slate-800">{item.questionEn}</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">AR Question</p>
+                                <p className="text-sm font-bold text-slate-800" dir="rtl">{item.questionAr}</p>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-200">
+                                <div>
+                                  <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">EN Answer</p>
+                                  <p className="text-xs text-slate-600 leading-relaxed mt-1">{item.answerEn}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">AR Answer</p>
+                                  <p className="text-xs text-slate-600 leading-relaxed mt-1" dir="rtl">{item.answerAr}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-10 text-slate-400 text-xs">
+                            {isArabic ? "لا توجد أسئلة شائعة مولّدة بعد" : "No FAQ items yet"}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* AEO sub-tab */}
+                    {seoTab === "aeo" && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
+                            {isArabic ? "وصف AEO (للذكاء الاصطناعي)" : "AEO Agent Description (for AI crawlers)"}
+                          </p>
+                          <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-sm text-slate-800 leading-relaxed">
+                            {seoCurrent?.current?.aeo_agent_description_present
+                              ? (isArabic ? "موجود في الـ DB" : "Present in DB")
+                              : (isArabic ? "غير مولّد" : "Not generated")}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">
+                            {isArabic ? "قائمة الإمكانيات" : "Capability List"}
+                          </p>
+                          <div className="space-y-1.5">
+                            {Array.isArray((seoCurrent as any)?.current?.aeo_capability_list) &&
+                            (seoCurrent as any).current.aeo_capability_list.length > 0 ? (
+                              (seoCurrent as any).current.aeo_capability_list.map((cap: string, i: number) => (
+                                <div key={i} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 flex items-start gap-2">
+                                  <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                                  <span>{cap}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-xs text-slate-400 italic">{isArabic ? "لا توجد إمكانيات" : "No capabilities"}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* History sub-tab */}
+                    {seoTab === "history" && (
+                      <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                        {seoHistory.length === 0 ? (
+                          <div className="text-center py-10 text-slate-400 text-xs">
+                            {isArabic ? "لا يوجد سجل بعد" : "No history yet"}
+                          </div>
+                        ) : (
+                          seoHistory.map((snap: any, i: number) => (
+                            <div key={snap.generatedAt} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                              <div className="flex-1 space-y-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                                    {i === 0 ? (isArabic ? "الحالي" : "CURRENT") : `#${i}`}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-700">{snap.model}</span>
+                                </div>
+                                <p className="text-xs font-bold text-slate-800 truncate">{snap.seo_title}</p>
+                                <p className="text-[10px] text-slate-500">
+                                  {new Date(snap.generatedAt).toLocaleString(isArabic ? "ar-EG" : "en-US")} · ~{snap.tokensEstimated} tokens · {snap.faqCount} FAQ · {snap.capabilityCount} caps
+                                </p>
+                              </div>
+                              {i > 0 && (
+                                <button
+                                  onClick={() => handleSeoRollback(snap.generatedAt)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex-shrink-0"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>{isArabic ? "استعادة" : "Restore"}</span>
+                                </button>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
       </div>
-
-      {/* MODAL 1: EDIT USER DIALOG */}
       {editingUser && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" dir={isArabic ? "rtl" : "ltr"}>
           <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-left">
