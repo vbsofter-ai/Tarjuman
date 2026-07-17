@@ -9,8 +9,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Text is required for speech synthesis" }, { status: 400 });
     }
 
-    const ai = getGeminiClient();
-
     // Map language to a speaker/voice or instruction
     let voice = "Zephyr"; // Zephyr, Fenrir, Kore, Charon, Puck
     let promptInstruction = `Synthesize the following text in a natural, clear voice: "${text}"`;
@@ -30,7 +28,7 @@ export async function POST(req: Request) {
     }
 
     const response = await callWithRetry(() => 
-      ai.models.generateContent({
+      getGeminiClient().models.generateContent({
         model: "gemini-3.1-flash-tts-preview",
         contents: [{ parts: [{ text: promptInstruction }] }],
         config: {

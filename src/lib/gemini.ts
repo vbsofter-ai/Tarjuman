@@ -1,26 +1,62 @@
 import { GoogleGenAI } from "@google/genai";
 
-let aiClient: GoogleGenAI | null = null;
+let clientsList: GoogleGenAI[] = [];
+let activeIndex = 0;
+
+// Initialize clients list
+function initializeClients() {
+  if (clientsList.length > 0) return;
+
+  const keysString = process.env.GEMINI_API_KEYS || "";
+  const singleKey = process.env.GEMINI_API_KEY || "";
+  
+  let keys: string[] = [];
+  if (keysString) {
+    keys = keysString.split(",").map(k => k.trim()).filter(Boolean);
+  }
+  if (keys.length === 0 && singleKey) {
+    keys = [singleKey];
+  }
+  
+  if (keys.length === 0) {
+    throw new Error("No Gemini API keys defined. Please set GEMINI_API_KEY or GEMINI_API_KEYS in your environment.");
+  }
+
+  clientsList = keys.map(key => new GoogleGenAI({
+    apiKey: key,
+    httpOptions: {
+      headers: {
+        "User-Agent": "aistudio-build",
+      },
+    },
+  }));
+  activeIndex = 0;
+}
 
 export function getGeminiClient(): GoogleGenAI {
-  if (!aiClient) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY environment variable is not defined. Please configure it in your Secrets/Settings.");
-    }
-    aiClient = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
-  }
-  return aiClient;
+  initializeClients();
+  return clientsList[activeIndex];
 }
+
+// Function to rotate to the next key
+export function rotateGeminiClient(): GoogleGenAI {
+  initializeClients();
+  if (clientsList.length <= 1) {
+    return clientsList[0];
+  }
+  
+  const oldIndex = activeIndex;
+  activeIndex = (activeIndex + 1) % clientsList.length;
+  console.warn(`[Gemini API] Rotating API key due to rate limit/quota exhaustion (Index: ${oldIndex} -> ${activeIndex})`);
+  return clientsList[activeIndex];
+}
+
 export async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 1500): Promise<T> {
   let attempt = 0;
+  initializeClients();
+  // If we have multiple keys, we allow retrying more times to cycle through the keys
+  const maxRetries = Math.max(retries, clientsList.length * 2);
+
   while (true) {
     try {
       return await fn();
@@ -30,6 +66,21 @@ export async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delayM
       const errorMessage = String(error?.message || "").toUpperCase();
       const errorCode = String(error?.code || error?.cause?.code || "").toUpperCase();
       
+      const isQuotaExceeded = 
+        errorStatus === 429 || 
+        errorMessage.includes("429") || 
+        errorMessage.includes("RESOURCE_EXHAUSTED") || 
+        errorMessage.includes("LIMIT");
+        
+      const isInvalidKey = 
+        errorStatus === 400 && 
+        (errorMessage.includes("API KEY") || errorMessage.includes("INVALID") || errorMessage.includes("NOT_FOUND"));
+      
+      // If quota exceeded or API key invalid, rotate key immediately for the next attempt
+      if (isQuotaExceeded || isInvalidKey) {
+        rotateGeminiClient();
+      }
+
       const isTransient = 
         errorStatus === 503 || 
         errorStatus === 429 ||
@@ -44,12 +95,13 @@ export async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delayM
         errorMessage.includes("FETCH FAILED") ||
         errorMessage.includes("TIMEOUT") ||
         errorCode.includes("TIMEOUT") ||
-        errorCode.includes("UND_ERR");
+        errorCode.includes("UND_ERR") ||
+        isInvalidKey; // Retrying with rotated key can resolve invalid key errors too!
 
-      if (isTransient && attempt < retries) {
-        console.warn(`[Gemini API] Request failed with transient status/message/code (${error.message}). Retrying in ${delayMs}ms... (Attempt ${attempt}/${retries})`);
+      if (isTransient && attempt < maxRetries) {
+        console.warn(`[Gemini API] Request failed (attempt ${attempt}/${maxRetries}). Retrying in ${delayMs}ms... (Error: ${error.message || error})`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
-        delayMs *= 2.5; // Exponential backoff
+        delayMs *= 2.0; // Exponential backoff
         continue;
       }
       throw error;

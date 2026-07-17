@@ -123,7 +123,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const ai = getGeminiClient();
+
 
     const srcLangName = LANGUAGE_NAMES[sourceLang] || sourceLang;
     const destLangName = LANGUAGE_NAMES[targetLang] || targetLang;
@@ -195,7 +195,7 @@ Ensure that if these terms are used, you mention them in the 'glossaryApplied' f
     const { model: selectedModel, tier: modelTier } = pickModelForDomain(domain, defaultModelFromDb);
 
     const response = await callWithRetry(() =>
-      ai.models.generateContent({
+      getGeminiClient().models.generateContent({
         model: selectedModel,
         contents: parts,
         config: {
