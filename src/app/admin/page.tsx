@@ -156,6 +156,11 @@ export default function AdminPage() {
   const [seoCurrent, setSeoCurrent] = useState<any | null>(null);
   const [seoHistory, setSeoHistory] = useState<any[]>([]);
   const [seoLoading, setSeoLoading] = useState(false);
+
+  // Gateway status (PayPal mode, Paymob status, etc.) — fetched dynamically
+  // so the admin UI reflects the actual runtime configuration instead of
+  // hardcoded "Sandbox" labels.
+  const [gatewayStatus, setGatewayStatus] = useState<any | null>(null);
   const [seoUpdating, setSeoUpdating] = useState(false);
   const [seoMessage, setSeoMessage] = useState<string | null>(null);
   const [seoTab, setSeoTab] = useState<"current" | "keywords" | "faq" | "aeo" | "history">("current");
@@ -394,9 +399,32 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, isAuthorized, currentUser]);
 
+  // Fetch gateway status (PayPal mode, Paymob status, AI model) so the
+  // settings tab renders the real runtime mode instead of a hardcoded
+  // "Sandbox" label.
+  useEffect(() => {
+    if (isAuthorized !== true || !currentUser) return;
+    const fetchGatewayStatus = async () => {
+      try {
+        const res = await fetch(`/api/admin/gateways?adminEmail=${encodeURIComponent(currentUser.email)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setGatewayStatus(data);
+        }
+      } catch (err) {
+        console.error("Failed to load gateway status:", err);
+      }
+    };
+    fetchGatewayStatus();
+    // Refresh every 30s so operator changes (env) become visible quickly.
+    const t = setInterval(fetchGatewayStatus, 30_000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthorized, currentUser]);
+
   if (isAuthorized === null) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white font-sans p-6">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-700 font-sans p-6">
         <div className="flex flex-col items-center gap-4">
           <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
           <p className="text-sm font-semibold tracking-wide">جاري التحقق من الصلاحيات... / Verifying access...</p>
@@ -407,14 +435,14 @@ export default function AdminPage() {
 
   if (isAuthorized === false) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white font-sans p-6" dir="rtl">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl">
-          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center mx-auto shadow-lg shadow-rose-500/5">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-700 font-sans p-6" dir="rtl">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-3xl p-8 text-center space-y-6 shadow-2xl">
+          <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-200 text-rose-500 flex items-center justify-center mx-auto shadow-lg shadow-rose-200/30">
             <Lock className="w-7 h-7" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-xl font-black text-white">دخول غير مصرح به!</h1>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <h1 className="text-xl font-black text-slate-900">دخول غير مصرح به!</h1>
+            <p className="text-xs text-slate-500 leading-relaxed">
               هذه الصفحة مخصصة لمدراء النظام الفائقين فقط (Super Admin). يرجى التأكد من تسجيل الدخول بحساب مخول للدخول إلى لوحة التحكم.
             </p>
           </div>
@@ -596,9 +624,9 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col" dir={isArabic ? "rtl" : "ltr"}>
+    <div className="h-screen bg-slate-50 text-slate-900 font-sans flex flex-col overflow-hidden" dir={isArabic ? "rtl" : "ltr"}>
       {/* Header */}
-      <header className="px-5 py-3.5 border-b border-slate-200 bg-white flex items-center justify-between text-slate-900 shadow-sm z-10">
+      <header className="px-5 py-3.5 border-b border-slate-200 bg-white flex items-center justify-between text-slate-900 shadow-sm z-10 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-2xl shadow-lg shadow-indigo-600/30">
             <ShieldCheck className="w-6 h-6" />
@@ -659,13 +687,16 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* Main Container */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-full md:w-60 border-r border-slate-200 bg-white p-3 flex flex-col gap-1 flex-shrink-0 text-slate-800 border-l-0">
-          <p className="text-[9px] text-slate-400 font-extrabold uppercase tracking-[0.15em] px-3 mb-2 mt-1 text-left">
+      {/* Main Container — uses min-h-0 so children can have independent scrolls */}
+      <div className="flex-1 flex flex-col md:flex-row min-h-0">
+        {/* Sidebar (independent scroll, with sticky status panel at bottom) */}
+        <aside className="w-full md:w-60 border-r border-slate-200 bg-white flex flex-col flex-shrink-0 text-slate-800 border-l-0 min-h-0">
+          {/* Top label — non-scrolling */}
+          <p className="text-[9px] text-slate-400 font-extrabold uppercase tracking-[0.15em] px-5 pt-3 pb-2 text-left flex-shrink-0 border-b border-slate-100">
             {isArabic ? "أدوات المدير الفائق" : "Super Admin Tools"}
           </p>
+          {/* Tabs region — scrolls independently */}
+          <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1 min-h-0">
           
           {[
             { id: "overview" as const, icon: LayoutDashboard, labelAr: "نظرة عامة", labelEn: "Overview", badge: null },
@@ -701,8 +732,10 @@ export default function AdminPage() {
             </button>
           ))}
 
-          {/* Diagnostics Download */}
-          <div className="mt-auto pt-4 border-t border-slate-100 hidden md:block space-y-2">
+          </nav>
+
+          {/* Bottom status panel — sticky, doesn't scroll with the tabs above */}
+          <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50/50 p-3 space-y-2 hidden md:block">
             {/* Quick System Status */}
             <div className="px-3 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2">
               <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">{isArabic ? "حالة المحرك" : "Engine Status"}</p>
@@ -727,8 +760,8 @@ export default function AdminPage() {
           </div>
         </aside>
 
-        {/* Workspace Body */}
-        <main className="flex-1 bg-slate-900 p-4 sm:p-6 overflow-y-auto">
+        {/* Workspace Body (independent scroll, light background) */}
+        <main className="flex-1 bg-slate-50 p-4 sm:p-6 overflow-y-auto min-h-0">
           {loading ? (
             <div className="h-96 flex flex-col items-center justify-center text-slate-400 gap-3">
               <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
@@ -1319,22 +1352,34 @@ export default function AdminPage() {
                         <div className="bg-slate-50/70 border border-slate-150 p-4 rounded-2xl space-y-3.5">
                           <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                             <span className="text-slate-850 font-bold flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span className={`w-2 h-2 rounded-full ${gatewayStatus?.paypal?.mode === "live" ? "bg-emerald-500" : "bg-amber-500"} animate-pulse`}></span>
                               <span>PayPal Gateway</span>
                             </span>
-                            <span className="px-2 py-0.5 rounded-md text-[8px] bg-emerald-50 border border-emerald-250 text-emerald-650 font-black uppercase tracking-wider">
-                              {isArabic ? "نشط" : "Active"}
+                            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${
+                              gatewayStatus?.paypal?.mode === "live"
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                : "bg-amber-50 border-amber-200 text-amber-700"
+                            }`}>
+                              {gatewayStatus?.paypal?.mode === "live"
+                                ? (isArabic ? "لايف • نشط" : "LIVE • ACTIVE")
+                                : (isArabic ? "تجريبي • نشط" : "SANDBOX • ACTIVE")}
                             </span>
                           </div>
                           <div className="space-y-1">
                             <p className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold">{isArabic ? "معرف العميل (Client ID):" : "Client ID:"}</p>
-                            <p className="font-mono text-[9px] text-slate-600 truncate bg-white p-2 rounded-lg border border-slate-200 text-left" dir="ltr">BAAtW0FbdA45N9wcAkCk...Vzcw</p>
+                            <p className="font-mono text-[9px] text-slate-600 truncate bg-white p-2 rounded-lg border border-slate-200 text-left" dir="ltr">
+                              {gatewayStatus?.paypal?.clientIdPreview || "BAAtW0FbdA45N9wcAkCk...Vzcw"}
+                            </p>
                           </div>
                           <div className="space-y-1">
                             <p className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold">{isArabic ? "الوضعية التشغيلية:" : "Gateway Mode:"}</p>
-                            <p className="text-slate-650 text-[10px] bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 flex items-center justify-between">
-                              <span>{isArabic ? "الوضع التجريبي (Sandbox)" : "Sandbox Mode"}</span>
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                            <p className="text-slate-700 text-[10px] bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 flex items-center justify-between">
+                              <span>
+                                {gatewayStatus?.paypal?.mode === "live"
+                                  ? (isArabic ? "لايف (Live) — معاملات حقيقية" : "Live — real transactions")
+                                  : (isArabic ? "تجريبي (Sandbox) — معاملات وهمية" : "Sandbox — test transactions")}
+                              </span>
+                              <span className={`w-1.5 h-1.5 rounded-full ${gatewayStatus?.paypal?.mode === "live" ? "bg-emerald-500" : "bg-amber-500"}`}></span>
                             </p>
                           </div>
                         </div>
@@ -1343,16 +1388,22 @@ export default function AdminPage() {
                         <div className="bg-slate-50/70 border border-slate-150 p-4 rounded-2xl space-y-3.5">
                           <div className="flex justify-between items-center border-b border-slate-100 pb-2">
                             <span className="text-slate-850 font-bold flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span className={`w-2 h-2 rounded-full ${gatewayStatus?.paymob?.configured ? "bg-emerald-500" : "bg-slate-300"} animate-pulse`}></span>
                               <span>Paymob Gateway</span>
                             </span>
-                            <span className="px-2 py-0.5 rounded-md text-[8px] bg-emerald-50 border border-emerald-250 text-emerald-650 font-black uppercase tracking-wider">
-                              {isArabic ? "نشط" : "Active"}
+                            <span className={`px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider border ${
+                              gatewayStatus?.paymob?.configured
+                                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                : "bg-slate-100 border-slate-200 text-slate-600"
+                            }`}>
+                              {gatewayStatus?.paymob?.configured
+                                ? (isArabic ? "نشط" : "ACTIVE")
+                                : (isArabic ? "غير مهيّأ" : "NOT CONFIGURED")}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-600 font-mono text-left" dir="ltr">
                             <div className="bg-white p-2 rounded-lg border border-slate-200 space-y-1">
-                              <span className="text-[8px] text-slate-400 uppercase tracking-wider font-extrabold block">Card Integration</span>
+                              <span className="text-[8px] text-slate-400 uppercase tracking-wider font-extrabold block">InStore</span>
                               <span>5738501</span>
                             </div>
                             <div className="bg-white p-2 rounded-lg border border-slate-200 space-y-1">
@@ -1362,7 +1413,9 @@ export default function AdminPage() {
                           </div>
                           <div className="space-y-1">
                             <p className="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold">{isArabic ? "معرف الإطار (Iframe ID):" : "Iframe ID:"}</p>
-                            <p className="font-mono text-[10px] text-slate-650 bg-white p-2 rounded-lg border border-slate-200 text-left" dir="ltr">1002380</p>
+                            <p className="font-mono text-[10px] text-slate-700 bg-white p-2 rounded-lg border border-slate-200 text-left" dir="ltr">
+                              {gatewayStatus?.paymob?.iframeId || "1002380"}
+                            </p>
                           </div>
                         </div>
                       </div>

@@ -160,6 +160,7 @@ export default function App() {
 
   // App running states
   const [isTranslating, setIsTranslating] = useState(false);
+  const [retryStatus, setRetryStatus] = useState<{ attempt: number; max: number; waitMs: number; reason: string } | null>(null);
   const [isTtsPlaying, setIsTtsPlaying] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -1003,30 +1004,85 @@ export default function App() {
 
     setIsTranslating(true);
     setError("");
+    setRetryStatus(null);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    // Client-side retry: Gemini free-tier frequently returns 503/429
+    // ("AI is under pressure") when the request rate is too high. Instead
+    // of failing immediately, retry with exponential backoff and a
+    // visible status so the user knows it's auto-recovering.
+    const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504]);
+    const MAX_CLIENT_RETRIES = 3;
+    const RETRY_DELAYS_MS = [2500, 5000, 10000]; // exponential-ish backoff
+
+    const payload = {
+      text: textToTranslate,
+      sourceLang,
+      targetLang,
+      domain,
+      tone,
+      glossary: glossary.map((g) => ({ source: g.source, target: g.target })),
+      file: fileToTranslate,
+    };
+
     try {
-      const res = await fetch("/api/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          text: textToTranslate,
-          sourceLang,
-          targetLang,
-          domain,
-          tone,
-          glossary: glossary.map((g) => ({ source: g.source, target: g.target })),
-          file: fileToTranslate,
-        }),
-      });
+      let res: Response | null = null;
+      let data: any = null;
+      let lastError: string | null = null;
 
-      const data = await res.json();
+      for (let attempt = 0; attempt <= MAX_CLIENT_RETRIES; attempt++) {
+        if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
+        if (attempt > 0) {
+          const waitMs = RETRY_DELAYS_MS[attempt - 1] || 10000;
+          setRetryStatus({
+            attempt,
+            max: MAX_CLIENT_RETRIES,
+            waitMs,
+            reason: lastError || "transient",
+          });
+          try {
+            await new Promise((resolve, reject) => {
+              const timeout = setTimeout(resolve, waitMs);
+              controller.signal.addEventListener("abort", () => {
+                clearTimeout(timeout);
+                reject(new DOMException("Aborted", "AbortError"));
+              });
+            });
+          } catch (e) {
+            throw e;
+          }
+        }
 
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "An error occurred during translation");
+        res = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify(payload),
+        });
+        data = await res.json().catch(() => ({}));
+
+        if (res.ok && !data.error) {
+          break; // success
+        }
+
+        const isTransient = TRANSIENT_STATUSES.has(res.status) ||
+          (typeof data?.error === "string" &&
+            (/UNAVAILABLE|TEMPORARY|BUSY|OVERLOAD|QUOTA|EXHAUST|503|429|ضغط/i.test(data.error)));
+        if (!isTransient) {
+          // Non-transient — fail fast.
+          throw new Error(data?.error || "An error occurred during translation");
+        }
+        lastError = data?.error || `HTTP ${res.status}`;
+        if (attempt === MAX_CLIENT_RETRIES) {
+          throw new Error(lastError);
+        }
+        // else: loop will wait + retry
+      }
+
+      if (!res || !res.ok || data?.error) {
+        throw new Error(data?.error || "An error occurred during translation");
       }
 
       setTranslatedText(data.translatedText);
@@ -1082,6 +1138,7 @@ export default function App() {
       }
     } finally {
       setIsTranslating(false);
+      setRetryStatus(null);
       abortControllerRef.current = null;
     }
   };
@@ -1859,6 +1916,13 @@ export default function App() {
                       <p className="text-xs font-semibold text-slate-600 animate-pulse">
                         {isArabic ? "جاري الترجمة بذكاء واحترافية..." : "Translating with domain mastery..."}
                       </p>
+                      {retryStatus && (
+                        <p className="text-[10px] text-amber-700 font-bold mt-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 inline-block">
+                          {isArabic
+                            ? `إعادة محاولة تلقائية ${retryStatus.attempt}/${retryStatus.max} خلال ${Math.ceil(retryStatus.waitMs / 1000)} ثانية... (ضغط مؤقت على Gemini)`
+                            : `Auto-retrying ${retryStatus.attempt}/${retryStatus.max} in ${Math.ceil(retryStatus.waitMs / 1000)}s… (transient Gemini pressure)`}
+                        </p>
+                      )}
                     </div>
                   ) : null}
 
