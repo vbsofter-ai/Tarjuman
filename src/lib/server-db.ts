@@ -13,11 +13,14 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  connectTimeout: 5000 // 5 seconds connection timeout to prevent hanging on hosting servers
+  connectTimeout: 5000, // 5 seconds connection timeout to prevent hanging on hosting servers
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000
 });
 
 // Resilient Fallback Mode State
 let isFallbackMode = false;
+let fallbackStartedAt = 0;
 let isInitialized = false;
 
 // Seed initial in-memory tables
@@ -330,12 +333,19 @@ export async function initializeDatabase() {
   } catch (error) {
     console.error("[DB] Database initialization failed. Using professional in-memory fallback database:", error);
     isFallbackMode = true;
+    fallbackStartedAt = Date.now();
   } finally {
     if (conn) conn.release();
   }
 }
 
 async function ensureInitialized() {
+  // Circuit breaker: attempt to reconnect to DB pool after 30 seconds of fallback mode
+  if (isFallbackMode && Date.now() - fallbackStartedAt > 30000) {
+    console.log("[DB] Fallback cooldown expired. Attempting to reconnect to database pool...");
+    isFallbackMode = false;
+    isInitialized = false;
+  }
   if (!isInitialized && !isFallbackMode) {
     await initializeDatabase();
   }
@@ -368,6 +378,7 @@ export async function getUserByEmail(email: string) {
   } catch (error) {
     console.error("[DB] getUserByEmail query failed, falling back to in-memory:", error);
     isFallbackMode = true;
+    fallbackStartedAt = Date.now();
     return fallbackUsers.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
   }
 }
@@ -529,6 +540,7 @@ export async function updateUserQuota(email: string, wordCount: number) {
   } catch (error) {
     console.error("[DB] updateUserQuota failed, using in-memory fallback:", error);
     isFallbackMode = true;
+    fallbackStartedAt = Date.now();
     fallbackUsers = fallbackUsers.map(u => {
       if (u.email.toLowerCase() === email.toLowerCase()) {
         return { ...u, quotaUsed: u.quotaUsed + wordCount };
@@ -617,6 +629,7 @@ export async function getSystemConfig() {
   } catch (error) {
     console.error("[DB] getSystemConfig query failed, using in-memory fallback:", error);
     isFallbackMode = true;
+    fallbackStartedAt = Date.now();
     return fallbackSystemConfig;
   }
 }
@@ -640,6 +653,7 @@ export async function updateSystemConfig(config: Record<string, any>) {
   } catch (error) {
     console.error("[DB] updateSystemConfig failed, using in-memory fallback:", error);
     isFallbackMode = true;
+    fallbackStartedAt = Date.now();
     fallbackSystemConfig = { ...fallbackSystemConfig, ...config };
   }
 }
@@ -702,6 +716,7 @@ export async function logAction(action: string, type: string, details: string) {
   } catch (error) {
     console.error("[DB] Logging failed, using in-memory fallback:", error);
     isFallbackMode = true;
+    fallbackStartedAt = Date.now();
     fallbackLogs.unshift({
       id: Date.now() + Math.floor(Math.random() * 1000),
       timestamp: new Date(),
