@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGeminiClient, callWithRetry } from "@/src/lib/gemini";
+import { getSystemConfig } from "@/src/lib/server-db";
 
 export async function POST(req: Request) {
   try {
@@ -27,8 +28,11 @@ export async function POST(req: Request) {
       promptInstruction = `Synthesize this German text with correct native accent: "${text}"`;
     }
 
+    // Fetch active system config to load dynamic keys from DB
+    const systemConfig = await getSystemConfig().catch(() => null);
+
     const response = await callWithRetry(() => 
-      getGeminiClient().models.generateContent({
+      getGeminiClient(systemConfig?.geminiApiKeys).models.generateContent({
         model: "gemini-3.1-flash-tts-preview",
         contents: [{ parts: [{ text: promptInstruction }] }],
         config: {

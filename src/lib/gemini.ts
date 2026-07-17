@@ -2,45 +2,60 @@ import { GoogleGenAI } from "@google/genai";
 
 let clientsList: GoogleGenAI[] = [];
 let activeIndex = 0;
+let currentKeysFingerprint = "";
 
-// Initialize clients list
-function initializeClients() {
-  if (clientsList.length > 0) return;
-
-  const keysString = process.env.GEMINI_API_KEYS || "";
-  const singleKey = process.env.GEMINI_API_KEY || "";
-  
+// Initialize clients list dynamically
+export function initializeClients(customKeys?: string | string[]) {
   let keys: string[] = [];
-  if (keysString) {
-    keys = keysString.split(",").map(k => k.trim()).filter(Boolean);
-  }
-  if (keys.length === 0 && singleKey) {
-    keys = [singleKey];
-  }
-  
-  if (keys.length === 0) {
-    throw new Error("No Gemini API keys defined. Please set GEMINI_API_KEY or GEMINI_API_KEYS in your environment.");
+  if (customKeys) {
+    if (Array.isArray(customKeys)) {
+      keys = customKeys.map(k => k.trim()).filter(Boolean);
+    } else if (typeof customKeys === "string") {
+      // Split by comma or newline so they can input one per line or comma-separated
+      keys = customKeys.split(/[\n,]+/).map(k => k.trim()).filter(Boolean);
+    }
   }
 
-  clientsList = keys.map(key => new GoogleGenAI({
-    apiKey: key,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
+  // Fallback to environment variables if no keys were provided via database config
+  if (keys.length === 0) {
+    const keysString = process.env.GEMINI_API_KEYS || "";
+    const singleKey = process.env.GEMINI_API_KEY || "";
+    if (keysString) {
+      keys = keysString.split(/[\n,]+/).map(k => k.trim()).filter(Boolean);
+    }
+    if (keys.length === 0 && singleKey) {
+      keys = [singleKey];
+    }
+  }
+
+  const fingerprint = keys.join("|");
+  // If the keys have changed, re-instantiate clients
+  if (fingerprint !== currentKeysFingerprint) {
+    clientsList = keys.map(key => new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
       },
-    },
-  }));
-  activeIndex = 0;
+    }));
+    activeIndex = 0;
+    currentKeysFingerprint = fingerprint;
+    console.log(`[Gemini API] Instantiated ${clientsList.length} clients.`);
+  }
+
+  if (clientsList.length === 0) {
+    throw new Error("No Gemini API keys defined. Please set GEMINI_API_KEY / GEMINI_API_KEYS in .env or configure keys in the Admin Panel.");
+  }
 }
 
-export function getGeminiClient(): GoogleGenAI {
-  initializeClients();
+export function getGeminiClient(customKeys?: string | string[]): GoogleGenAI {
+  initializeClients(customKeys);
   return clientsList[activeIndex];
 }
 
 // Function to rotate to the next key
 export function rotateGeminiClient(): GoogleGenAI {
-  initializeClients();
   if (clientsList.length <= 1) {
     return clientsList[0];
   }
@@ -53,7 +68,6 @@ export function rotateGeminiClient(): GoogleGenAI {
 
 export async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 1500): Promise<T> {
   let attempt = 0;
-  initializeClients();
   // If we have multiple keys, we allow retrying more times to cycle through the keys
   const maxRetries = Math.max(retries, clientsList.length * 2);
 

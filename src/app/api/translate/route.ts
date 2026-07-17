@@ -195,7 +195,7 @@ Ensure that if these terms are used, you mention them in the 'glossaryApplied' f
     const { model: selectedModel, tier: modelTier } = pickModelForDomain(domain, defaultModelFromDb);
 
     const response = await callWithRetry(() =>
-      getGeminiClient().models.generateContent({
+      getGeminiClient(systemConfig?.geminiApiKeys).models.generateContent({
         model: selectedModel,
         contents: parts,
         config: {

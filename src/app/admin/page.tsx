@@ -81,6 +81,7 @@ interface SystemConfig {
   maintenanceMode: boolean;
   enableLinguisticAnalysis: boolean;
   logTranslationRequests: boolean;
+  geminiApiKeys?: string;
 }
 
 interface AnalyticsData {
@@ -145,6 +146,7 @@ export default function AdminPage() {
     maintenanceMode: false,
     enableLinguisticAnalysis: true,
     logTranslationRequests: true,
+    geminiApiKeys: "",
   });
   const [liveLogs, setLiveLogs] = useState<{ id: string; time: string; action: string; type: "info" | "success" | "warning"; details: string }[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -1222,6 +1224,24 @@ export default function AdminPage() {
                         <option value="gemini-2.5-pro">Gemini 2.5 Pro (ذكي ومناسب للترجمات الاحترافية)</option>
                         <option value="gemini-2.0-flash">Gemini 2.0 Flash (سريع للغاية وموفر للتكلفة)</option>
                       </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-550">
+                        {isArabic ? "مفاتيح Gemini API للتبديل التلقائي (مفتاح في كل سطر أو مفصولة بفاصلة):" : "Rotational Gemini API Keys (one per line or comma-separated):"}
+                      </label>
+                      <textarea
+                        value={systemConfig.geminiApiKeys || ""}
+                        onChange={(e) => setSystemConfig(prev => ({ ...prev, geminiApiKeys: e.target.value }))}
+                        rows={4}
+                        placeholder={isArabic ? "ضع مفاتيحك هنا..." : "Paste your Gemini API keys here..."}
+                        className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:outline-none focus:border-indigo-500 focus:bg-white font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400 leading-normal">
+                        {isArabic 
+                          ? "سيقوم النظام تلقائياً بالتبديل بين هذه المفاتيح وتخطي أي مفتاح ينفد حده أو يكون غير صالح، مما يضمن خدمة مستمرة دون توقف." 
+                          : "The system will automatically rotate between these keys and skip any rate-limited or invalid keys to ensure uninterrupted service."}
+                      </p>
                     </div>
 
                     <div className="space-y-2">

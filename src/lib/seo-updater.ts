@@ -152,6 +152,7 @@ function estimateTokens(snapshot: SeoSnapshot): number {
 }
 
 async function generateSeoSnapshot(): Promise<SeoSnapshot> {
+  const config = await getSystemConfig().catch(() => null);
   // Use the cheapest model — this runs every 24h and is pure
   // text-in / JSON-out. Flash is the right tier (per the model
   // selection pattern in MEMORY.md).
@@ -162,7 +163,7 @@ async function generateSeoSnapshot(): Promise<SeoSnapshot> {
   // SEO_MODEL env to override per deployment.
   const model = process.env.SEO_MODEL || "gemini-flash-latest";
 
-  const response: any = await getGeminiClient().models.generateContent({
+  const response: any = await getGeminiClient(config?.geminiApiKeys).models.generateContent({
     model,
     contents: buildPrompt(),
     config: {
