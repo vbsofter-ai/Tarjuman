@@ -67,6 +67,7 @@ export function rotateGeminiClient(): GoogleGenAI {
 }
 
 export async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 1500): Promise<T> {
+  const initialDelay = delayMs;
   let attempt = 0;
   // If we have multiple keys, we allow retrying more times to cycle through the keys
   const maxRetries = Math.max(retries, clientsList.length * 2);
@@ -90,9 +91,11 @@ export async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delayM
         errorStatus === 400 && 
         (errorMessage.includes("API KEY") || errorMessage.includes("INVALID") || errorMessage.includes("NOT_FOUND"));
       
+      let rotated = false;
       // If quota exceeded or API key invalid, rotate key immediately for the next attempt
       if (isQuotaExceeded || isInvalidKey) {
         rotateGeminiClient();
+        rotated = true;
       }
 
       const isTransient = 
@@ -113,9 +116,15 @@ export async function callWithRetry<T>(fn: () => Promise<T>, retries = 3, delayM
         isInvalidKey; // Retrying with rotated key can resolve invalid key errors too!
 
       if (isTransient && attempt < maxRetries) {
+        if (rotated) {
+          // Reset delay when rotating to a fresh key
+          delayMs = initialDelay;
+        }
         console.warn(`[Gemini API] Request failed (attempt ${attempt}/${maxRetries}). Retrying in ${delayMs}ms... (Error: ${error.message || error})`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
-        delayMs *= 2.0; // Exponential backoff
+        if (!rotated) {
+          delayMs *= 2.0; // Exponential backoff only when retrying on the same key
+        }
         continue;
       }
       throw error;

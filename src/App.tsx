@@ -39,6 +39,8 @@ import {
   Lock,
   ShieldCheck,
   PencilLine,
+  Zap,
+  Loader2,
   X
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -162,6 +164,11 @@ export default function App() {
   const [isTranslating, setIsTranslating] = useState(false);
   const [retryStatus, setRetryStatus] = useState<{ attempt: number; max: number; waitMs: number; reason: string } | null>(null);
   const [isTtsPlaying, setIsTtsPlaying] = useState(false);
+  // Auto-translate: when ON, the translator runs automatically 1s after the
+  // user stops typing. Disabled for unauthenticated users (we don't want
+  // their 3 free trial credits to be eaten by a single typing session).
+  const [autoTranslate, setAutoTranslate] = useState<boolean>(true);
+  const [autoTranslating, setAutoTranslating] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState("");
@@ -288,6 +295,51 @@ export default function App() {
     setFeedbackComment("");
     setFeedbackSubmitted(false);
   }, [sourceText]);
+
+  // ---------------------------------------------------------------------
+  // Real-time auto-translate (debounced).
+  //
+  // When the user stops typing for AUTO_TRANSLATE_DEBOUNCE_MS, the
+  // translator fires automatically — as long as the feature is on, the
+  // user is signed in (to preserve unauth free-trial credits), no file
+  // is attached (file translation is always explicit), the text is long
+  // enough, and we're not already translating.
+  //
+  // We cancel any in-flight request when new text arrives via the
+  // existing abortControllerRef, so users see a fresh result on the
+  // latest text without an old request overwriting it.
+  // ---------------------------------------------------------------------
+  const AUTO_TRANSLATE_DEBOUNCE_MS = 1000;
+  const AUTO_TRANSLATE_MIN_CHARS = 3;
+  const autoTranslateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!autoTranslate) return;
+    if (!sourceText || sourceText.trim().length < AUTO_TRANSLATE_MIN_CHARS) return;
+    if (fileAttached) return; // explicit-only when a file is attached
+    if (!currentUser) return; // preserve unauth free-trial credits
+    if (isTranslating) return; // don't pile on top of an in-flight request
+
+    // Reset the debounce timer on every keystroke
+    if (autoTranslateTimerRef.current) clearTimeout(autoTranslateTimerRef.current);
+
+    autoTranslateTimerRef.current = setTimeout(() => {
+      // Bail out if state changed in the meantime
+      if (isTranslating) return;
+      setAutoTranslating(true);
+      handleTranslate(undefined, undefined, { mode: "auto" }).finally(() => {
+        setAutoTranslating(false);
+      });
+    }, AUTO_TRANSLATE_DEBOUNCE_MS);
+
+    return () => {
+      if (autoTranslateTimerRef.current) {
+        clearTimeout(autoTranslateTimerRef.current);
+        autoTranslateTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceText, autoTranslate, fileAttached, currentUser?.email]);
 
   const handleFeedbackSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -955,7 +1007,12 @@ export default function App() {
   };
 
   // Call Translate API
-  const handleTranslate = async (overrideText?: string, overrideFile?: FileData | null) => {
+  const handleTranslate = async (
+    overrideText?: string,
+    overrideFile?: FileData | null,
+    options: { mode?: "manual" | "auto" } = {}
+  ) => {
+    const mode = options.mode || "manual";
     const textToTranslate = overrideText !== undefined ? overrideText : sourceText;
     const fileToTranslate = overrideFile !== undefined ? overrideFile : fileAttached;
 
@@ -1131,10 +1188,19 @@ export default function App() {
 
     } catch (err: any) {
       if (err.name === "AbortError") {
-        setError(isArabic ? "تم إلغاء عملية الترجمة." : "Translation process was cancelled.");
+        // Auto-translate cancellations (because the user kept typing) are
+        // silent — only the explicit-manual cancellation shows a banner.
+        if (mode === "manual") {
+          setError(isArabic ? "تم إلغاء عملية الترجمة." : "Translation process was cancelled.");
+        }
       } else {
         console.error(err);
-        setError(err.message || "Failed to contact translation service.");
+        if (mode === "manual") {
+          setError(err.message || "Failed to contact translation service.");
+        } else {
+          // Auto-translate errors stay quiet — log only.
+          console.warn("[auto-translate] silent failure:", err?.message);
+        }
       }
     } finally {
       setIsTranslating(false);
@@ -1693,6 +1759,18 @@ export default function App() {
                       <PencilLine className="w-3 h-3" />
                       {isArabic ? "المصدر" : "SOURCE"}
                     </span>
+                    {autoTranslate && currentUser && !fileAttached && !isTranslating && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <Zap className="w-2.5 h-2.5 fill-current" />
+                        {isArabic ? "فوري" : "AUTO"}
+                      </span>
+                    )}
+                    {autoTranslating && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 animate-pulse">
+                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                        {isArabic ? "جاري الترجمة..." : "Translating..."}
+                      </span>
+                    )}
                     <span className="text-[10px] text-slate-400 font-medium">
                       {isArabic ? "النص الأصلي للترجمة" : "Original text to translate"}
                     </span>
@@ -2049,14 +2127,53 @@ export default function App() {
                       <span>{isArabic ? "إيقاف الترجمة" : "Stop"}</span>
                     </button>
                   ) : (
-                    <button
-                      onClick={() => handleTranslate()}
-                      disabled={!sourceText.trim() && !fileAttached}
-                      className="flex items-center gap-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 active:scale-95 cursor-pointer border-0"
-                    >
-                      <Sparkles className="w-4 h-4 animate-pulse" />
-                      <span>{isArabic ? "ترجم الآن" : "Translate"}</span>
-                    </button>
+                    <>
+                      {/* Auto-translate toggle (only for signed-in users; file translation
+                          is always explicit) */}
+                      {currentUser && !fileAttached && (
+                        <button
+                          onClick={() => setAutoTranslate((v) => !v)}
+                          title={
+                            autoTranslate
+                              ? isArabic
+                                ? "الترجمة الفورية مفعّلة — اضغط لإيقافها"
+                                : "Auto-translate is ON — click to disable"
+                              : isArabic
+                                ? "الترجمة الفورية معطّلة — اضغط لتفعيلها"
+                                : "Auto-translate is OFF — click to enable"
+                          }
+                          className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-2 rounded-xl transition-all border ${
+                            autoTranslate
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                              : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          <Zap className={`w-3.5 h-3.5 ${autoTranslate ? "fill-current" : ""}`} />
+                          <span className="hidden sm:inline">
+                            {isArabic ? "فوري" : "Auto"}
+                          </span>
+                          <span
+                            className={`relative w-7 h-3.5 rounded-full transition-colors ${
+                              autoTranslate ? "bg-emerald-500" : "bg-slate-300"
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${
+                                autoTranslate ? "translate-x-3.5" : "translate-x-0.5"
+                              }`}
+                            />
+                          </span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleTranslate()}
+                        disabled={!sourceText.trim() && !fileAttached}
+                        className="flex items-center gap-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl transition-all shadow-md shadow-indigo-600/10 hover:shadow-indigo-600/20 active:scale-95 cursor-pointer border-0"
+                      >
+                        <Sparkles className="w-4 h-4 animate-pulse" />
+                        <span>{isArabic ? "ترجم الآن" : "Translate"}</span>
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
