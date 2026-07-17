@@ -1218,6 +1218,9 @@ export default function AdminPage() {
                       >
                         <option value="gemini-3.5-flash">Gemini 3.5 Flash (متعدد الاستخدامات وسريع)</option>
                         <option value="gemini-3.5-pro">Gemini 3.5 Pro (عالي الذكاء والترجمة للمستندات المعقدة)</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (متوازن ومستقر)</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro (ذكي ومناسب للترجمات الاحترافية)</option>
+                        <option value="gemini-2.0-flash">Gemini 2.0 Flash (سريع للغاية وموفر للتكلفة)</option>
                       </select>
                     </div>
 

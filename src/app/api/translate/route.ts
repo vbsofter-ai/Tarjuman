@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Type } from "@google/genai";
 import { getGeminiClient, callWithRetry } from "@/src/lib/gemini";
-import { getUserByEmail, logAction, updateUserQuota } from "@/src/lib/server-db";
+import { getUserByEmail, logAction, updateUserQuota, getSystemConfig } from "@/src/lib/server-db";
 import { getVertical } from "@/src/lib/verticals";
 
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -74,11 +74,13 @@ const SPECIALIZED_MODEL = process.env.GEMINI_SPECIALIZED_MODEL
   ? String(process.env.GEMINI_SPECIALIZED_MODEL)
   : "gemini-flash-latest";
 
-function pickModelForDomain(domain: string): { model: string; tier: "flash" | "pro" } {
+function pickModelForDomain(domain: string, defaultModelFromDb?: string): { model: string; tier: "flash" | "pro" } {
   if (SPECIALIZED_DOMAINS.has(domain)) {
-    return { model: SPECIALIZED_MODEL, tier: "pro" };
+    const specializedFromDb = defaultModelFromDb && defaultModelFromDb.includes("-pro") ? defaultModelFromDb : SPECIALIZED_MODEL;
+    return { model: specializedFromDb, tier: "pro" };
   }
-  return { model: DEFAULT_MODEL, tier: "flash" };
+  const flashFromDb = defaultModelFromDb || DEFAULT_MODEL;
+  return { model: flashFromDb, tier: "flash" };
 }
 
 export async function POST(req: Request) {
@@ -183,7 +185,14 @@ Ensure that if these terms are used, you mention them in the 'glossaryApplied' f
       return NextResponse.json({ error: "No text or file content provided for translation" }, { status: 400 });
     }
 
-    const { model: selectedModel, tier: modelTier } = pickModelForDomain(domain);
+    // Fetch active system config to determine selected translation engine/model
+    const systemConfig = await getSystemConfig().catch((e) => {
+      console.error("[Translate API] Failed to fetch system configuration:", e);
+      return null;
+    });
+    const defaultModelFromDb = systemConfig?.translationEngine;
+
+    const { model: selectedModel, tier: modelTier } = pickModelForDomain(domain, defaultModelFromDb);
 
     const response = await callWithRetry(() =>
       ai.models.generateContent({

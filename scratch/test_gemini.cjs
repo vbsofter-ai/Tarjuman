@@ -21,11 +21,11 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-console.log('Using API Key:', process.env.GEMINI_API_KEY ? 'FOUND' : 'MISSING');
+console.log('Testing gemini-2.0-flash...');
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 ai.models.generateContent({
-  model: 'gemini-2.5-flash',
+  model: 'gemini-2.0-flash',
   contents: 'Hello, respond with exactly one word: Success.'
 }).then(r => console.log('Response:', r.text))
   .catch(e => console.error('Error:', e));
