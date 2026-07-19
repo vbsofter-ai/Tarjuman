@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUserByEmail, updateUser, logAction } from "@/src/lib/server-db";
+import { getUserByEmail, updateUser, logAction, isOpenSourceMode } from "@/src/lib/server-db";
 
 /**
  * POST /api/auth/subscribe
@@ -29,6 +29,27 @@ export async function POST(req: Request) {
     const user = await getUserByEmail(email);
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    // Open Source / Free Mode — bump any paid plan to enterprise for free
+    if (await isOpenSourceMode()) {
+      const updatedUser = await updateUser({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        plan: planId === "free" ? "free" : planId, // honor requested plan
+        quotaUsed: user.quotaUsed,
+        quotaLimit: 999999,
+        status: user.status,
+        role: user.role,
+        permissions: user.permissions,
+      });
+      await logAction(
+        "Subscription (Open Source Mode)",
+        "success",
+        `User ${email} upgraded to ${planId} via open-source/free mode`
+      );
+      return NextResponse.json({ ...updatedUser, openSource: true });
     }
 
     // Always allow downgrade to free.

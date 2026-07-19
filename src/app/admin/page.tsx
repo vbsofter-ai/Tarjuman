@@ -56,8 +56,22 @@ import {
   RotateCcw,
   History as HistoryIcon,
   Wand2,
-  BookOpen
+  BookOpen,
+  Unlock
 } from "lucide-react";
+
+interface SystemConfig {
+  defaultFreeLimit: number;
+  translationEngine: string;
+  requireAuthForUpload: boolean;
+  maintenanceMode: boolean;
+  enableLinguisticAnalysis: boolean;
+  logTranslationRequests: boolean;
+  geminiApiKeys?: string;
+  openSourceMode?: boolean;
+  openSourceMessage?: string;
+  openSourceEndDate?: string;
+}
 
 interface AdminUser {
   id: string;
@@ -72,16 +86,6 @@ interface AdminUser {
   preferredDomain: string;
   role?: "super_admin" | "admin" | "moderator" | "editor" | "user";
   permissions?: string; // JSON string representation of array
-}
-
-interface SystemConfig {
-  defaultFreeLimit: number;
-  translationEngine: string;
-  requireAuthForUpload: boolean;
-  maintenanceMode: boolean;
-  enableLinguisticAnalysis: boolean;
-  logTranslationRequests: boolean;
-  geminiApiKeys?: string;
 }
 
 interface AnalyticsData {
@@ -146,6 +150,9 @@ export default function AdminPage() {
     maintenanceMode: false,
     enableLinguisticAnalysis: true,
     logTranslationRequests: true,
+    openSourceMode: false,
+    openSourceMessage: "Tarjuman is currently free to use for everyone.",
+    openSourceEndDate: "",
     geminiApiKeys: "",
   });
   const [liveLogs, setLiveLogs] = useState<{ id: string; time: string; action: string; type: "info" | "success" | "warning"; details: string }[]>([]);
@@ -1339,6 +1346,133 @@ export default function AdminPage() {
                           className="w-4 h-4 text-rose-600 bg-white border-slate-300 rounded cursor-pointer"
                         />
                       </div>
+
+                      {/* Open Source / Free Mode — kill switch for subscriptions */}
+                      <div className={`flex items-center justify-between p-4 rounded-2xl border transition-colors ${
+                        systemConfig.openSourceMode
+                          ? "bg-emerald-50 border-emerald-200"
+                          : "bg-slate-50 border-slate-200"
+                      }`}>
+                        <div className="space-y-1 flex-1">
+                          <h5 className={`text-xs font-bold flex items-center gap-1.5 ${
+                            systemConfig.openSourceMode ? "text-emerald-700" : "text-slate-700"
+                          }`}>
+                            <Unlock className="w-3.5 h-3.5" />
+                            {isArabic ? "فتح المشروع بالكامل مجاناً (وضع Open Source)" : "Make Project Fully Free (Open Source Mode)"}
+                            {systemConfig.openSourceMode && (
+                              <span className="ms-2 px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider bg-emerald-600 text-white">
+                                {isArabic ? "مفعّل" : "ON"}
+                              </span>
+                            )}
+                          </h5>
+                          <p className="text-[10px] text-slate-600 leading-normal">
+                            {isArabic
+                              ? "عند التفعيل: كل الاشتراكات المدفوعة تُخفى، الحصص غير محدودة، وصفحات الأسعار تعرض 'مجاني بالكامل'. مفيد للحملات التسويقية والـ beta والإصدارات مفتوحة المصدر."
+                              : "When ON: hides paid plans, lifts all quota limits, /pricing shows a 'fully free' banner. Use for marketing campaigns, beta launches, or open-source releases."}
+                          </p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={!!systemConfig.openSourceMode}
+                          onChange={(e) => setSystemConfig(prev => ({ ...prev, openSourceMode: e.target.checked }))}
+                          className="w-4 h-4 text-emerald-600 bg-white border-slate-300 rounded cursor-pointer flex-shrink-0"
+                        />
+                      </div>
+
+                      {systemConfig.openSourceMode && (
+                        <div className="space-y-3 px-1">
+                          {/* Duration / End Date Picker */}
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                              {isArabic ? "مدة الفترة المجانية (اختياري — اتركه فارغاً للتفعيل الدائم):" : "Free Period Duration (optional — leave empty for permanent):"}
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={systemConfig.openSourceEndDate || ""}
+                              onChange={(e) => setSystemConfig(prev => ({ ...prev, openSourceEndDate: e.target.value }))}
+                              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-semibold focus:outline-none focus:border-emerald-500 focus:bg-white"
+                            />
+                            {/* Quick Duration Buttons */}
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {[
+                                { label: isArabic ? "يوم واحد" : "1 Day", days: 1 },
+                                { label: isArabic ? "3 أيام" : "3 Days", days: 3 },
+                                { label: isArabic ? "أسبوع" : "1 Week", days: 7 },
+                                { label: isArabic ? "أسبوعين" : "2 Weeks", days: 14 },
+                                { label: isArabic ? "شهر" : "1 Month", days: 30 },
+                                { label: isArabic ? "3 أشهر" : "3 Months", days: 90 },
+                              ].map(({ label, days }) => (
+                                <button
+                                  key={days}
+                                  type="button"
+                                  onClick={() => {
+                                    const end = new Date(Date.now() + days * 86400000);
+                                    const iso = end.toISOString().slice(0, 16);
+                                    setSystemConfig(prev => ({ ...prev, openSourceEndDate: iso }));
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors cursor-pointer"
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                              {systemConfig.openSourceEndDate && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSystemConfig(prev => ({ ...prev, openSourceEndDate: "" }))}
+                                  className="px-2.5 py-1 text-[10px] font-bold bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors cursor-pointer"
+                                >
+                                  {isArabic ? "إزالة المدة (دائم)" : "Remove Limit (Permanent)"}
+                                </button>
+                              )}
+                            </div>
+                            {/* Remaining Time Display */}
+                            {systemConfig.openSourceEndDate && (() => {
+                              const endMs = new Date(systemConfig.openSourceEndDate).getTime();
+                              const nowMs = Date.now();
+                              if (endMs <= nowMs) {
+                                return (
+                                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50 border border-red-200 rounded-xl">
+                                    <span className="text-[10px] font-bold text-red-600">
+                                      {isArabic ? "⚠️ انتهت الفترة المجانية! سيتم إيقاف الوضع المجاني تلقائياً عند الطلب القادم." : "⚠️ Free period has expired! Open Source Mode will auto-disable on next request."}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              const diff = endMs - nowMs;
+                              const days = Math.floor(diff / 86400000);
+                              const hours = Math.floor((diff % 86400000) / 3600000);
+                              const mins = Math.floor((diff % 3600000) / 60000);
+                              return (
+                                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                                  <span className="text-[10px] font-bold text-emerald-700">
+                                    {isArabic ? "⏱️ المتبقي:" : "⏱️ Remaining:"}{" "}
+                                    {days > 0 && `${days} ${isArabic ? "يوم" : "d"} `}
+                                    {hours > 0 && `${hours} ${isArabic ? "ساعة" : "h"} `}
+                                    {`${mins} ${isArabic ? "دقيقة" : "m"}`}
+                                    {" — "}
+                                    {isArabic ? "ينتهي في:" : "Ends at:"}{" "}
+                                    {new Date(systemConfig.openSourceEndDate).toLocaleString(isArabic ? "ar-EG" : "en-US", { dateStyle: "medium", timeStyle: "short" })}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          {/* Visitor Message */}
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                              {isArabic ? "الرسالة المعروضة للزوار:" : "Visitor-facing message:"}
+                            </label>
+                            <textarea
+                              value={systemConfig.openSourceMessage || ""}
+                              onChange={(e) => setSystemConfig(prev => ({ ...prev, openSourceMessage: e.target.value }))}
+                              placeholder={isArabic ? "مثال: ترجمان مجاني للجميع بمناسبة الإطلاق" : "e.g. Tarjuman is free for everyone during our launch week"}
+                              rows={2}
+                              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium focus:outline-none focus:border-emerald-500 focus:bg-white"
+                              dir="auto"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Financial Integrations Settings Card */}

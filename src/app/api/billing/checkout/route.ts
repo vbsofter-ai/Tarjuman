@@ -3,6 +3,8 @@ import { PRICING_PLANS, PlanId, BillingPeriod, PaymentProvider, DEFAULT_PROVIDER
 import {
   createPayment,
   getUserByEmail,
+  getOpenSourceState,
+  isOpenSourceMode,
   logAction,
   storePaymobIdentifiers,
   storePaypalIdentifiers,
@@ -40,6 +42,20 @@ export async function POST(req: NextRequest) {
     }
     if (!["free", "pro", "enterprise"].includes(planId)) {
       return NextResponse.json({ error: "Invalid planId" }, { status: 400 });
+    }
+
+    // Open Source / Free Mode — no payment required, project is free
+    if (await isOpenSourceMode()) {
+      const state = await getOpenSourceState();
+      return NextResponse.json(
+        {
+          openSource: true,
+          message: state.message,
+          // Hint to the client: just upgrade the user to enterprise for free
+          freeUpgrade: true,
+        },
+        { status: 200 }
+      );
     }
 
     // The free plan needs no payment — apply immediately.

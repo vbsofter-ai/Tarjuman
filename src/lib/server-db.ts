@@ -104,6 +104,14 @@ let fallbackSystemConfig: Record<string, any> = {
   maintenanceMode: false,
   enableLinguisticAnalysis: true,
   logTranslationRequests: true,
+  // When true: every user is treated as enterprise (unlimited), pricing
+  // page renders an "Open Source" banner instead of payment plans, and
+  // /api/billing/* returns a graceful "project is free" message instead
+  // of opening a payment session. Use for marketing campaigns, beta
+  // launches, or full open-source releases.
+  openSourceMode: false,
+  openSourceMessage: "Tarjuman is currently free to use for everyone.",
+  openSourceEndDate: "", // ISO date string — if set, open source mode auto-disables after this date
 };
 
 let fallbackLogs: any[] = [
@@ -285,6 +293,9 @@ export async function initializeDatabase() {
       maintenanceMode: false,
       enableLinguisticAnalysis: true,
       logTranslationRequests: true,
+      openSourceMode: false,
+      openSourceMessage: "Tarjuman is currently free to use for everyone.",
+      openSourceEndDate: "",
       seo_title: "بوابة ترجمان للترجمة الذكية المتخصصة | Tarjuman Professional AI Translation Portal",
       seo_description: "ترجمان هو نظام ذكاء اصطناعي لترجمة النصوص والمستندات والملفات الطبية، القانونية، والمالية بدقة احترافية فائقة مع الحفاظ الكامل على التنسيقات والتبصر اللغوي والسياقي.",
       seo_keywords: "ترجمة, ذكاء اصطناعي, ترجمان, ترجمة ملفات, ترجمة قانونية, ترجمة طبية, ترجمة تقنية, ترجمة مستندات, ترجمة احترافية بالذكاء الاصطناعي, مترجم ذكي متخصص, ترجمة ملفات PDF, ترجمة معتمدة, ترجمة فورية دقيقة, ترجمة مصطلحات مالية, أفضل موقع ترجمة, مترجم نصوص كاملة, ترجمة مستندات مصورة, ترجمة ممسوحة ضوئياً, مترجم بي دي اف, ترجمة جوجل, بديل مترجم جوجل, AI Translation, Legal Translation, PDF Translation, Medical Translation, English to Arabic, Document Translator, Context-aware Translation, Neural Machine Translation, Professional Arabic Translation, OCR Translation, Translate PDF document, Gemini translation engine, terminology mining, neural translator",
@@ -1061,6 +1072,65 @@ export async function getQuotaStatus(email: string): Promise<{
     quotaResetAt: resetAt ? resetAt.toISOString() : null,
     daysUntilReset,
     wasReset,
+  };
+}
+
+// =====================================================================
+// OPEN-SOURCE / FREE MODE — single source of truth
+// =====================================================================
+
+/**
+ * Read the operator-controlled "open source" flag. When true, the project
+ * is fully free: no quotas, no pricing, no payment sessions. This is the
+ * kill-switch the operator can flip from the admin panel.
+ * 
+ * If openSourceEndDate is set and has passed, this function will
+ * automatically disable open source mode and return false.
+ */
+export async function isOpenSourceMode(): Promise<boolean> {
+  const config = await getSystemConfig();
+  if (!config.openSourceMode) return false;
+
+  // Check if the free period has expired
+  if (config.openSourceEndDate) {
+    const endDate = new Date(config.openSourceEndDate).getTime();
+    if (!isNaN(endDate) && Date.now() >= endDate) {
+      // Auto-disable open source mode
+      console.log("[Config] Open Source Mode free period has expired. Auto-disabling.");
+      await updateSystemConfig({ openSourceMode: false, openSourceEndDate: "" }).catch(() => {});
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Returns the custom operator message + the flag + end date. Used by
+ * /pricing to render an "Open Source" banner in place of payment plans.
+ */
+export async function getOpenSourceState(): Promise<{
+  enabled: boolean;
+  message: string;
+  endDate: string;
+}> {
+  const config = await getSystemConfig();
+  let enabled = Boolean(config.openSourceMode);
+
+  // Check if the free period has expired
+  if (enabled && config.openSourceEndDate) {
+    const endMs = new Date(config.openSourceEndDate).getTime();
+    if (!isNaN(endMs) && Date.now() >= endMs) {
+      console.log("[Config] Open Source Mode free period has expired. Auto-disabling.");
+      await updateSystemConfig({ openSourceMode: false, openSourceEndDate: "" }).catch(() => {});
+      enabled = false;
+    }
+  }
+
+  return {
+    enabled,
+    message: String(config.openSourceMessage || "Tarjuman is currently free to use for everyone."),
+    endDate: enabled ? String(config.openSourceEndDate || "") : "",
   };
 }
 

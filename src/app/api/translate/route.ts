@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Type } from "@google/genai";
 import { getGeminiClient, callWithRetry } from "@/src/lib/gemini";
-import { getUserByEmail, logAction, updateUserQuota, getSystemConfig } from "@/src/lib/server-db";
+import { getUserByEmail, logAction, updateUserQuota, getSystemConfig, isOpenSourceMode } from "@/src/lib/server-db";
 import { getVertical } from "@/src/lib/verticals";
 
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -105,6 +105,9 @@ export async function POST(req: Request) {
       wordCount = file.extractedText.trim().split(/\s+/).filter(Boolean).length;
     }
 
+    // Resolve open-source mode once (used for quota bypass + response flag)
+    const openSourceEnabled = await isOpenSourceMode();
+
     if (email) {
       const dbUser = await getUserByEmail(email);
       if (dbUser) {
@@ -114,7 +117,8 @@ export async function POST(req: Request) {
             technicalDetails: "Account is suspended by administrator."
           }, { status: 403 });
         }
-        if (dbUser.quotaUsed + wordCount > dbUser.quotaLimit) {
+        // Open Source / Free Mode — skip quota check entirely
+        if (!openSourceEnabled && dbUser.quotaUsed + wordCount > dbUser.quotaLimit) {
           return NextResponse.json({
             error: "لقد تجاوزت الحصة المحددة لحسابك هذا الشهر. يرجى ترقية باقتك للاستمرار بالترجمة الفورية.",
             technicalDetails: "User word limit quota exceeded."
@@ -285,7 +289,11 @@ Ensure that if these terms are used, you mention them in the 'glossaryApplied' f
       );
     }
 
-    return NextResponse.json(translationResult);
+    // Attach open-source flag to the response so client UI can show a "FREE" badge
+    return NextResponse.json({
+      ...translationResult,
+      openSource: openSourceEnabled,
+    });
   } catch (error: any) {
     console.error("Translation API error:", error);
     

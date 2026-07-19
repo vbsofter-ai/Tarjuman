@@ -41,7 +41,8 @@ import {
   PencilLine,
   Zap,
   Loader2,
-  X
+  X,
+  Unlock
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -190,12 +191,39 @@ export default function App() {
   const [successPlanName, setSuccessPlanName] = useState("");
   const [subscribingPlan, setSubscribingPlan] = useState<"free" | "pro" | "enterprise" | null>(null);
   const [billingProvider, setBillingProvider] = useState<"paymob" | "paypal">("paymob");
+  // Open Source / Free Mode — admin toggle that makes the project fully free
+  const [openSourceMode, setOpenSourceMode] = useState(false);
 
 
   // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Fetch public system config on mount + on tab focus
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/public/config", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !data || !data.openSource) return;
+        setOpenSourceMode(Boolean(data.openSource.enabled));
+      } catch {
+        // Silent — never break the app on a config read failure
+      }
+    };
+    load();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -393,6 +421,41 @@ export default function App() {
       // User is not signed in. Open AuthModal first!
       setShowAuthModal(true);
       return;
+    }
+
+    // Open Source / Free Mode — admin has flipped the kill switch for
+    // subscriptions. All paid plans are free right now; just upgrade the
+    // user to the requested plan via the subscribe endpoint and show the
+    // success modal. The endpoint already returns the upgraded user.
+    try {
+      if (openSourceMode) {
+        setSubscribingPlan(planId);
+        const res = await fetch("/api/auth/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: currentUser.email, planId }),
+        });
+        const data = await res.json();
+        if (!res.ok || data?.error) {
+          throw new Error(data?.error || "Failed to upgrade (open source mode)");
+        }
+        setCurrentUser(data);
+          localStorage.setItem("tarjuman_current_user", JSON.stringify(data));
+          setSuccessPlanName(
+            planId === "pro"
+              ? (isArabic ? "الباقة الاحترافية (مجانية حالياً)" : "Pro Plan (free during open-source mode)")
+              : planId === "enterprise"
+              ? (isArabic ? "باقة الشركات (مجانية حالياً)" : "Enterprise (free during open-source mode)")
+              : (isArabic ? "الباقة المجانية" : "Free Plan")
+          );
+          setShowUpgradeSuccess(true);
+          setShowPricingModal(false);
+          setSubscribingPlan(null);
+          return;
+      }
+    } catch (e) {
+      // If the open-source upgrade fails, fall through to the normal flow
+      console.warn("Open-source mode upgrade failed; falling back to normal flow", e);
     }
 
     // If a billing period toggle is shown next to the modal, the caller
@@ -1388,14 +1451,21 @@ export default function App() {
               <span className="hidden xs:inline">{isArabic ? "قيمنا" : "Rate us"}</span>
             </button>
 
-            {/* Pricing list button */}
-            <button
-              onClick={() => setShowPricingModal(true)}
-              className="flex items-center gap-1.5 text-xs font-bold px-2 py-1.5 sm:px-3 sm:py-2 text-indigo-600 hover:bg-indigo-50 border border-indigo-100 rounded-xl transition-all shadow-sm bg-white cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden xs:inline">{isArabic ? "الأسعار" : "Pricing"}</span>
-            </button>
+            {/* Pricing list button — switches to FREE badge when admin has enabled open-source mode */}
+            {openSourceMode ? (
+              <span className="flex items-center gap-1.5 text-[10px] sm:text-xs font-extrabold px-2 py-1.5 sm:px-3 sm:py-2 text-white bg-emerald-600 border border-emerald-700 rounded-xl shadow-sm cursor-default">
+                <Unlock className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">{isArabic ? "مجاني بالكامل" : "FREE FOR ALL"}</span>
+              </span>
+            ) : (
+              <button
+                onClick={() => setShowPricingModal(true)}
+                className="flex items-center gap-1.5 text-xs font-bold px-2 py-1.5 sm:px-3 sm:py-2 text-indigo-600 hover:bg-indigo-50 border border-indigo-100 rounded-xl transition-all shadow-sm bg-white cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">{isArabic ? "الأسعار" : "Pricing"}</span>
+              </button>
+            )}
 
             {/* Language interface toggle */}
             <button
