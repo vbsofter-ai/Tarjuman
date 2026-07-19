@@ -53,7 +53,7 @@ const T = {
     trustedBy: "موثوق به من قبل آلاف المترجمين والفرق في الشرق الأوسط",
     openSourceBadge: "مفتوح المصدر • مجاني بالكامل",
     openSourceHeroTitle: "ترجمان مجاني للجميع",
-    openSourceHeroSubtitle: "كل الباقات المدفوعة معطّلة حالياً. استخدم المنصة بحصص غير محدودة بدون أي اشتراك أو بطاقة بنكية.",
+    openSourceHeroSubtitle: "كل الباقات المدفوعة معطّلة حالياً. استخدم المنصة بحصص غير محدودة وبدون أي اشتراك لفترة محدودة.",
     openSourceCta: "ابدأ الترجمة الآن",
     openSourceFeature1: "ترجمات غير محدودة (بدون حصص شهرية)",
     openSourceFeature2: "جميع اللغات والمجالات (قانوني، طبي، تقني، مالي…)",
@@ -105,7 +105,7 @@ const T = {
     trustedBy: "Trusted by thousands of translators and teams across the Middle East",
     openSourceBadge: "Open Source • Free for everyone",
     openSourceHeroTitle: "Tarjuman is free for everyone",
-    openSourceHeroSubtitle: "All paid plans are currently disabled. Use the platform with unlimited quotas — no subscription or credit card required.",
+    openSourceHeroSubtitle: "All paid plans are currently disabled. Enjoy unlimited free translations for a limited time!",
     openSourceCta: "Start translating now",
     openSourceFeature1: "Unlimited translations (no monthly quotas)",
     openSourceFeature2: "All languages & domains (legal, medical, technical, financial…)",
@@ -395,7 +395,9 @@ export default function PricingClient({ initialOpenSource }: { initialOpenSource
                   {t.openSourceHeroTitle}
                 </h2>
                 <p className="mt-4 text-base sm:text-lg text-slate-700 leading-relaxed max-w-2xl">
-                  {openSourceState.message || t.openSourceHeroSubtitle}
+                  {openSourceState.message && openSourceState.message !== "Tarjuman is currently free to use for everyone."
+                    ? openSourceState.message
+                    : t.openSourceHeroSubtitle}
                 </p>
                 <div className="mt-7">
                   <Link
