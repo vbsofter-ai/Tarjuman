@@ -193,6 +193,9 @@ export default function App() {
   const [billingProvider, setBillingProvider] = useState<"paymob" | "paypal">("paymob");
   // Open Source / Free Mode — admin toggle that makes the project fully free
   const [openSourceMode, setOpenSourceMode] = useState(false);
+  // Maintenance Mode
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState("");
 
 
   // Refs
@@ -208,8 +211,16 @@ export default function App() {
         const res = await fetch("/api/public/config", { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
-        if (cancelled || !data || !data.openSource) return;
-        setOpenSourceMode(Boolean(data.openSource.enabled));
+        if (cancelled || !data) return;
+        
+        if (data.openSource) {
+          setOpenSourceMode(Boolean(data.openSource.enabled));
+        }
+        
+        if (data.maintenance) {
+          setMaintenanceMode(Boolean(data.maintenance.enabled));
+          setMaintenanceMessage(data.maintenance.message || "");
+        }
       } catch {
         // Silent — never break the app on a config read failure
       }
@@ -1098,7 +1109,7 @@ export default function App() {
 
     // Quota and Auth Gates
     if (currentUser) {
-      if (currentUser.quotaUsed + wordCount > currentUser.quotaLimit) {
+      if (!openSourceMode && currentUser.quotaUsed + wordCount > currentUser.quotaLimit) {
         setError(
           isArabic
             ? "لقد استنفدت الحصة المتاحة لحسابك هذا الشهر. يرجى ترقية باقتك للاستمرار بالترجمة الفورية."
@@ -1412,6 +1423,26 @@ export default function App() {
     return mapping[iconName] || <MessageSquare className="w-4 h-4" />;
   };
 
+  if (maintenanceMode) {
+    return (
+      <div dir={isArabic ? "rtl" : "ltr"} className="min-h-screen bg-slate-50 flex items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center border border-slate-100">
+          <div className="w-20 h-20 mx-auto bg-amber-50 rounded-full flex items-center justify-center mb-6">
+            <span className="text-4xl">🛠️</span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-800 mb-3">
+            {isArabic ? "وضع الصيانة" : "Under Maintenance"}
+          </h1>
+          <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6">
+            {maintenanceMessage || (isArabic 
+              ? "نقوم ببعض التحديثات التقنية الآن. يرجى المحاولة بعد قليل." 
+              : "We are currently performing some technical updates. Please check back soon.")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       dir={isArabic ? "rtl" : "ltr"}
@@ -1587,16 +1618,18 @@ export default function App() {
                               <span>{isArabic ? "لوحة التحكم للمدير" : "Admin Panel"}</span>
                             </button>
                           )}
-                          <button
-                            onClick={() => {
-                              setShowPricingModal(true);
-                              setShowProfileDropdown(false);
-                            }}
-                            className="w-full text-right flex items-center gap-2 p-2 rounded-xl text-xs font-semibold text-indigo-600 hover:bg-indigo-50/50 transition-colors"
-                          >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span>{isArabic ? "ترقية الباقة والمميزات" : "Upgrade Plan"}</span>
-                          </button>
+                          {!openSourceMode && (
+                            <button
+                              onClick={() => {
+                                setShowPricingModal(true);
+                                setShowProfileDropdown(false);
+                              }}
+                              className="w-full text-right flex items-center gap-2 p-2 rounded-xl text-xs font-semibold text-indigo-600 hover:bg-indigo-50/50 transition-colors"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>{isArabic ? "ترقية الباقة والمميزات" : "Upgrade Plan"}</span>
+                            </button>
+                          )}
                           <button
                             onClick={handleLogout}
                             className="w-full text-right flex items-center gap-2 p-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50/50 transition-colors"
@@ -2441,16 +2474,34 @@ export default function App() {
         </div>
 
         {/* Inline Pricing plans section */}
-        <div className="pt-10 border-t border-slate-100/60">
-          <PricingTable
-            currentUser={currentUser}
-            onSubscribe={handleSubscribe}
-            isArabic={isArabic}
-            loadingPlanId={subscribingPlan}
-            provider={billingProvider}
-            onProviderChange={setBillingProvider}
-          />
-        </div>
+        {!openSourceMode ? (
+          <div className="pt-10 border-t border-slate-100/60">
+            <PricingTable
+              currentUser={currentUser}
+              onSubscribe={handleSubscribe}
+              isArabic={isArabic}
+              loadingPlanId={subscribingPlan}
+              provider={billingProvider}
+              onProviderChange={setBillingProvider}
+            />
+          </div>
+        ) : (
+          <div className="pt-10 border-t border-slate-100/60 max-w-4xl mx-auto">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-8 text-center shadow-sm">
+              <div className="mx-auto w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
+                <Sparkles className="w-8 h-8 text-emerald-600" />
+              </div>
+              <h2 className="text-2xl font-black text-slate-900 mb-2">
+                {isArabic ? "ترجمان مجاني للجميع" : "Tarjuman is Free for Everyone"}
+              </h2>
+              <p className="text-slate-600 mb-0">
+                {isArabic 
+                  ? "كل الباقات المدفوعة معطّلة حالياً. استخدم المنصة بحصص غير محدودة وبدون أي اشتراك لفترة محدودة."
+                  : "All paid plans are currently disabled. Enjoy unlimited free translations for a limited time!"}
+              </p>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Popups and Overlays Modals */}
@@ -2476,7 +2527,7 @@ export default function App() {
         )}
 
         {/* Pop-up Pricing Plans Modal */}
-        {showPricingModal && (
+        {showPricingModal && !openSourceMode && (
           <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}

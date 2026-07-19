@@ -31,6 +31,12 @@ export async function POST(req: Request) {
     // Fetch active system config to load dynamic keys from DB
     const systemConfig = await getSystemConfig().catch(() => null);
 
+    if (systemConfig?.maintenanceMode) {
+      return NextResponse.json({
+        error: systemConfig.maintenanceMessage || "النظام حالياً في وضع الصيانة. يرجى المحاولة بعد قليل.",
+      }, { status: 503 });
+    }
+
     const response = await callWithRetry(() => 
       getGeminiClient(systemConfig?.geminiApiKeys).models.generateContent({
         model: "gemini-3.1-flash-tts-preview",

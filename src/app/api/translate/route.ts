@@ -108,6 +108,15 @@ export async function POST(req: Request) {
     // Resolve open-source mode once (used for quota bypass + response flag)
     const openSourceEnabled = await isOpenSourceMode();
 
+    // Check system maintenance mode
+    const earlySystemConfig = await getSystemConfig();
+    if (earlySystemConfig.maintenanceMode) {
+      return NextResponse.json({
+        error: earlySystemConfig.maintenanceMessage || "النظام حالياً في وضع الصيانة. يرجى المحاولة بعد قليل.",
+        technicalDetails: "System under maintenance"
+      }, { status: 503 });
+    }
+
     if (email) {
       const dbUser = await getUserByEmail(email);
       if (dbUser) {
