@@ -2474,7 +2474,7 @@ export default function App() {
         </div>
 
         {/* Inline Pricing plans section */}
-        {!openSourceMode ? (
+        {!openSourceMode && (
           <div className="pt-10 border-t border-slate-100/60">
             <PricingTable
               currentUser={currentUser}
@@ -2484,22 +2484,6 @@ export default function App() {
               provider={billingProvider}
               onProviderChange={setBillingProvider}
             />
-          </div>
-        ) : (
-          <div className="pt-10 border-t border-slate-100/60 max-w-4xl mx-auto">
-            <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-8 text-center shadow-sm">
-              <div className="mx-auto w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4">
-                <Sparkles className="w-8 h-8 text-emerald-600" />
-              </div>
-              <h2 className="text-2xl font-black text-slate-900 mb-2">
-                {isArabic ? "ترجمان مجاني للجميع" : "Tarjuman is Free for Everyone"}
-              </h2>
-              <p className="text-slate-600 mb-0">
-                {isArabic 
-                  ? "كل الباقات المدفوعة معطّلة حالياً. استخدم المنصة بحصص غير محدودة وبدون أي اشتراك لفترة محدودة."
-                  : "All paid plans are currently disabled. Enjoy unlimited free translations for a limited time!"}
-              </p>
-            </div>
           </div>
         )}
       </main>
